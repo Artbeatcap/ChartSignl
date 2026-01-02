@@ -1,0 +1,27 @@
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc && node scripts/build.js",
+    "start": "node dist/index.js",
+    "type-check": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.8.0",
+    "@supabase/supabase-js": "^2.38.0",
+    "dotenv": "^17.2.3",
+    "hono": "^4.0.0",
+    "openai": "^4.20.0",
+    "zod": "^3.22.0"
+  },
+  "devDependencies": {
+    "@chartsignl/core": "*",
+    "@types/node": "^20.10.0",
+    "tsx": "^4.6.0",
+    "typescript": "^5.3.0"
+  }
+}

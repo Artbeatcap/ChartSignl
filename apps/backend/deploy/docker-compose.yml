@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  chartsignl-api:
+    build:
+      context: ../..
+      dockerfile: apps/backend/Dockerfile
+    container_name: chartsignl-api
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    environment:
+      - NODE_ENV=production
+      - PORT=4000
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - CORS_ORIGINS=${CORS_ORIGINS:-https://charts.yourdomain.com}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:4000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - chartsignl
+
+networks:
+  chartsignl:
+    driver: bridge
