@@ -1,6 +1,6 @@
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Alert, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Card, Button } from '../../components';
 import { useAuthStore } from '../../store/authStore';
 import { getCurrentUser, getUsage } from '../../lib/api';
@@ -9,6 +9,7 @@ import { FREE_ANALYSIS_LIMIT, TRADING_STYLE_LABELS } from '@chartsignl/core';
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { user, signOut } = useAuthStore();
 
   const { data: profileData } = useQuery({
@@ -24,7 +25,21 @@ export default function ProfileScreen() {
   const profile = profileData?.user;
   const usage = usageData;
 
-  const handleSignOut = () => {
+  const handleSignOut = async () => {
+    // On web, Alert.alert callbacks don't work reliably, so sign out directly
+    if (Platform.OS === 'web') {
+      try {
+        queryClient.clear();
+        await signOut();
+        router.replace('/');
+      } catch (error) {
+        console.error('Sign out error:', error);
+        Alert.alert('Error', 'Failed to sign out. Please try again.');
+      }
+      return;
+    }
+
+    // On mobile, show confirmation alert
     Alert.alert(
       'Sign Out',
       'Are you sure you want to sign out?',
@@ -34,8 +49,14 @@ export default function ProfileScreen() {
           text: 'Sign Out',
           style: 'destructive',
           onPress: async () => {
-            await signOut();
-            router.replace('/');
+            try {
+              queryClient.clear();
+              await signOut();
+              router.replace('/');
+            } catch (error) {
+              console.error('Sign out error:', error);
+              Alert.alert('Error', 'Failed to sign out. Please try again.');
+            }
           },
         },
       ]
@@ -43,8 +64,23 @@ export default function ProfileScreen() {
   };
 
   const handleUpgrade = () => {
-    // TODO: Implement paywall
     Alert.alert('Coming Soon', 'Pro subscription will be available soon!');
+  };
+
+  const handleEditProfile = () => {
+    router.push('/(settings)/edit-profile');
+  };
+
+  const handleNotifications = () => {
+    router.push('/(settings)/notifications');
+  };
+
+  const handleHelp = () => {
+    router.push('/(settings)/help');
+  };
+
+  const handlePrivacy = () => {
+    router.push('/(settings)/privacy');
   };
 
   return (
@@ -129,36 +165,31 @@ export default function ProfileScreen() {
         <Card style={styles.settingsCard}>
           <Text style={styles.cardTitle}>Settings</Text>
           
-          <TouchableOpacity style={styles.settingsItem}>
+          <TouchableOpacity style={styles.settingsItem} onPress={handleEditProfile}>
             <Text style={styles.settingsItemText}>Edit Profile</Text>
             <Text style={styles.settingsArrow}>→</Text>
           </TouchableOpacity>
           
-          <TouchableOpacity style={styles.settingsItem}>
+          <TouchableOpacity style={styles.settingsItem} onPress={handleNotifications}>
             <Text style={styles.settingsItemText}>Notifications</Text>
             <Text style={styles.settingsArrow}>→</Text>
           </TouchableOpacity>
           
-          <TouchableOpacity style={styles.settingsItem}>
+          <TouchableOpacity style={styles.settingsItem} onPress={handleHelp}>
             <Text style={styles.settingsItemText}>Help & Support</Text>
             <Text style={styles.settingsArrow}>→</Text>
           </TouchableOpacity>
           
-          <TouchableOpacity style={styles.settingsItem}>
+          <TouchableOpacity style={styles.settingsItem} onPress={handlePrivacy}>
             <Text style={styles.settingsItemText}>Privacy Policy</Text>
             <Text style={styles.settingsArrow}>→</Text>
           </TouchableOpacity>
         </Card>
 
         {/* Sign Out */}
-        <Button
-          title="Sign Out"
-          onPress={handleSignOut}
-          variant="ghost"
-          fullWidth
-          style={styles.signOutButton}
-          textStyle={styles.signOutText}
-        />
+        <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
+          <Text style={styles.signOutText}>Sign Out</Text>
+        </TouchableOpacity>
 
         {/* App version */}
         <Text style={styles.version}>ChartSignl v1.0.0</Text>
@@ -307,9 +338,12 @@ const styles = StyleSheet.create({
   },
   // Sign out
   signOutButton: {
+    alignItems: 'center',
+    paddingVertical: spacing.md,
     marginBottom: spacing.md,
   },
   signOutText: {
+    ...typography.labelLg,
     color: colors.error,
   },
   version: {

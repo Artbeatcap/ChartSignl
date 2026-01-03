@@ -1,7 +1,7 @@
-import { useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Alert } from 'react-native';
-import { useRouter } from 'expo-router';
-import { Button, ProgressIndicator, Input, Card } from '../../components';
+import { useState, useRef } from 'react';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Alert, TextInput } from 'react-native';
+import { useRouter, useLocalSearchParams } from 'expo-router';
+import { Button, ProgressIndicator, Input } from '../../components';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { supabase } from '../../lib/supabase';
 import { updateProfile } from '../../lib/api';
@@ -11,13 +11,17 @@ type AuthMode = 'signup' | 'signin';
 
 export default function AccountScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ mode?: AuthMode }>();
   const { answers } = useOnboardingStore();
   
-  const [mode, setMode] = useState<AuthMode>('signup');
+  // Use mode from route params, default to 'signup' if not provided
+  const [mode, setMode] = useState<AuthMode>(params.mode || 'signup');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  const passwordInputRef = useRef<TextInput>(null);
 
   const handleEmailAuth = async () => {
     if (!email.trim() || !password.trim()) {
@@ -118,7 +122,7 @@ export default function AccountScreen() {
         <TouchableOpacity onPress={() => router.back()}>
           <Text style={styles.backButton}>←</Text>
         </TouchableOpacity>
-        <ProgressIndicator current={6} total={6} />
+        {mode === 'signup' && <ProgressIndicator current={6} total={6} />}
       </View>
 
       <ScrollView
@@ -177,9 +181,12 @@ export default function AccountScreen() {
             keyboardType="email-address"
             autoCapitalize="none"
             autoComplete="email"
+            returnKeyType="next"
+            onSubmitEditing={() => passwordInputRef.current?.focus()}
           />
           
           <Input
+            ref={passwordInputRef}
             label="Password"
             placeholder="••••••••"
             value={password}
@@ -187,6 +194,8 @@ export default function AccountScreen() {
             secureTextEntry
             autoCapitalize="none"
             containerStyle={{ marginTop: spacing.md }}
+            returnKeyType="go"
+            onSubmitEditing={handleEmailAuth}
           />
 
           {error && (

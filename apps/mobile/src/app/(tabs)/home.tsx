@@ -103,14 +103,24 @@ export default function HomeScreen() {
 
   // Handle AI analysis
   const handleAskAI = async () => {
-    // Check usage limits
-    if (!usage?.isPro && (usage?.freeAnalysesUsed || 0) >= FREE_ANALYSIS_LIMIT) {
+    // If usage data isn't loaded yet, show a message
+    if (!usage) {
+      Alert.alert('Please Wait', 'Loading your account information...');
+      return;
+    }
+
+    // Check usage limits - improved messaging
+    if (!usage.isPro && usage.freeAnalysesUsed >= FREE_ANALYSIS_LIMIT) {
       Alert.alert(
-        'Upgrade to Pro',
-        "You've used all your free analyses. Upgrade to Pro for unlimited access.",
+        '🔒 Free Limit Reached',
+        `You've used all ${FREE_ANALYSIS_LIMIT} free AI analyses. Upgrade to Pro for unlimited analyses, plus faster updates and priority support!`,
         [
-          { text: 'Later', style: 'cancel' },
-          { text: 'Upgrade', onPress: () => router.push('/(tabs)/profile') },
+          { text: 'Maybe Later', style: 'cancel' },
+          {
+            text: '✨ Upgrade to Pro',
+            onPress: () => router.push('/(tabs)/profile'),
+            style: 'default',
+          },
         ]
       );
       return;
@@ -155,9 +165,15 @@ export default function HomeScreen() {
             </Text>
             <Text style={styles.subtitle}>Find the key levels</Text>
           </View>
-          <View style={styles.usageBadge}>
-            <Text style={styles.usageText}>
-              {usage?.isPro ? '✨ Pro' : `${remainingAnalyses} left`}
+          <View style={[
+            styles.usageBadge,
+            !usage?.isPro && usage && usage.freeAnalysesUsed >= FREE_ANALYSIS_LIMIT && styles.usageBadgeWarning
+          ]}>
+            <Text style={[
+              styles.usageText,
+              !usage?.isPro && usage && usage.freeAnalysesUsed >= FREE_ANALYSIS_LIMIT && styles.usageTextWarning
+            ]}>
+              {usage?.isPro ? '✨ Pro' : usage ? `${remainingAnalyses} left` : '...'}
             </Text>
           </View>
         </View>
@@ -304,15 +320,31 @@ export default function HomeScreen() {
         {/* AI Analysis Button */}
         <View style={styles.aiSection}>
           <Button
-            title={isAnalyzing ? 'Analyzing...' : '🤖 Ask AI for Levels'}
+            title={
+              isAnalyzing 
+                ? 'Analyzing...' 
+                : !usage?.isPro && usage && usage.freeAnalysesUsed >= FREE_ANALYSIS_LIMIT
+                ? '🔒 Upgrade for More'
+                : '🤖 Ask AI for Levels'
+            }
             onPress={handleAskAI}
             size="lg"
             fullWidth
             loading={isAnalyzing}
-            disabled={isLoadingData || chartData.length === 0}
+            disabled={isLoadingData || chartData.length === 0 || !usage}
+            variant={
+              !usage?.isPro && usage && usage.freeAnalysesUsed >= FREE_ANALYSIS_LIMIT
+                ? 'secondary'
+                : 'primary'
+            }
           />
-          <Text style={styles.aiHint}>
-            Uses AI to identify key support & resistance levels
+          <Text style={[
+            styles.aiHint,
+            !usage?.isPro && usage && usage.freeAnalysesUsed >= FREE_ANALYSIS_LIMIT && styles.aiHintWarning
+          ]}>
+            {!usage?.isPro && usage && usage.freeAnalysesUsed >= FREE_ANALYSIS_LIMIT
+              ? `🔓 You've used all ${FREE_ANALYSIS_LIMIT} free analyses. Tap to upgrade for unlimited!`
+              : 'Uses AI to identify key support & resistance levels'}
           </Text>
         </View>
 
@@ -504,6 +536,15 @@ const styles = StyleSheet.create({
     ...typography.labelSm,
     color: colors.primary[700],
   },
+  usageBadgeWarning: {
+    backgroundColor: colors.red[50],
+    borderColor: colors.red[300],
+    borderWidth: 1,
+  },
+  usageTextWarning: {
+    color: colors.red[700],
+    fontWeight: '700',
+  },
   // Symbol selector
   symbolSelector: {
     flexDirection: 'row',
@@ -678,6 +719,10 @@ const styles = StyleSheet.create({
     color: colors.neutral[500],
     textAlign: 'center',
     marginTop: spacing.sm,
+  },
+  aiHintWarning: {
+    color: colors.primary[600],
+    fontWeight: '600',
   },
   // Analysis card
   analysisCard: {

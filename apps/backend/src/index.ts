@@ -5,7 +5,6 @@ import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
 
 // Routes
-import analyzeRoute from './routes/analyze';
 import analyzeDataRoute from './routes/analyzeData';
 import historyRoute from './routes/history';
 import userRoute from './routes/user';
@@ -40,7 +39,6 @@ app.get('/health', (c) => {
 });
 
 // API Routes
-app.route('/api/analyze-chart', analyzeRoute);
 app.route('/api/analyze-data', analyzeDataRoute);
 app.route('/api/analyses', historyRoute);
 app.route('/api/user', userRoute);

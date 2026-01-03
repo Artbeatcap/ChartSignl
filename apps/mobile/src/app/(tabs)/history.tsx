@@ -1,14 +1,15 @@
-import { View, Text, StyleSheet, SafeAreaView, FlatList, TouchableOpacity, Image, RefreshControl } from 'react-native';
+// Simplified History Screen - Data Only (No Images)
+
+import { View, Text, StyleSheet, SafeAreaView, FlatList, TouchableOpacity, RefreshControl } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Card } from '../../components';
+import { useQuery } from '@tanstack/react-query';
 import { getAnalysisHistory } from '../../lib/api';
 import { colors, typography, spacing, borderRadius, shadows } from '../../theme';
 import type { AnalysisHistoryItem } from '@chartsignl/core';
+import { Ionicons } from '@expo/vector-icons';
 
 export default function HistoryScreen() {
   const router = useRouter();
-  const queryClient = useQueryClient();
 
   const { data, isLoading, isRefetching, refetch } = useQuery({
     queryKey: ['analysisHistory'],
@@ -18,8 +19,6 @@ export default function HistoryScreen() {
   const analyses = data?.analyses || [];
 
   const handleAnalysisPress = (item: AnalysisHistoryItem) => {
-    // Navigate to detail view (you could add a detail screen)
-    // For now, we'll just refetch the analysis
     router.push({
       pathname: '/(tabs)/home',
       params: { analysisId: item.id },
@@ -44,11 +43,11 @@ export default function HistoryScreen() {
       onPress={() => handleAnalysisPress(item)}
       activeOpacity={0.7}
     >
-      <Image
-        source={{ uri: item.imageUrl }}
-        style={styles.thumbnail}
-        resizeMode="cover"
-      />
+      {/* Icon instead of image */}
+      <View style={styles.iconContainer}>
+        <Ionicons name="trending-up" size={32} color={colors.primary[500]} />
+      </View>
+      
       <View style={styles.cardContent}>
         <View style={styles.cardHeader}>
           {item.symbol && (
@@ -72,10 +71,10 @@ export default function HistoryScreen() {
 
   const renderEmptyState = () => (
     <View style={styles.emptyState}>
-      <Text style={styles.emptyEmoji}>📋</Text>
+      <Ionicons name="bar-chart-outline" size={80} color={colors.neutral[300]} />
       <Text style={styles.emptyTitle}>No analyses yet</Text>
       <Text style={styles.emptySubtitle}>
-        Your chart analyses will appear here after you upload your first chart.
+        Your chart analyses will appear here after you analyze your first chart.
       </Text>
     </View>
   );
@@ -84,7 +83,9 @@ export default function HistoryScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>History</Text>
-        <Text style={styles.headerSubtitle}>{analyses.length} analyses</Text>
+        <Text style={styles.headerSubtitle}>
+          {analyses.length} {analyses.length === 1 ? 'analysis' : 'analyses'}
+        </Text>
       </View>
 
       <FlatList
@@ -114,6 +115,8 @@ const styles = StyleSheet.create({
   header: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.neutral[200],
   },
   headerTitle: {
     ...typography.displaySm,
@@ -122,9 +125,11 @@ const styles = StyleSheet.create({
   headerSubtitle: {
     ...typography.bodyMd,
     color: colors.neutral[500],
+    marginTop: spacing.xs,
   },
   listContent: {
     paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
     paddingBottom: spacing.xxl,
   },
   analysisCard: {
@@ -135,44 +140,49 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     ...shadows.sm,
   },
-  thumbnail: {
+  iconContainer: {
     width: 80,
     height: 80,
-    backgroundColor: colors.neutral[100],
+    backgroundColor: colors.primary[50],
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   cardContent: {
     flex: 1,
-    padding: spacing.sm,
+    padding: spacing.md,
+    justifyContent: 'center',
   },
   cardHeader: {
     flexDirection: 'row',
     gap: spacing.xs,
-    marginBottom: spacing.xs,
+    marginBottom: spacing.sm,
   },
   symbolBadge: {
     backgroundColor: colors.primary[100],
-    paddingHorizontal: spacing.xs,
-    paddingVertical: 2,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
     borderRadius: borderRadius.sm,
   },
   symbolText: {
-    ...typography.labelSm,
+    ...typography.labelMd,
     color: colors.primary[700],
+    fontWeight: '600',
   },
   timeframeBadge: {
     backgroundColor: colors.neutral[100],
-    paddingHorizontal: spacing.xs,
-    paddingVertical: 2,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
     borderRadius: borderRadius.sm,
   },
   timeframeText: {
-    ...typography.labelSm,
+    ...typography.labelMd,
     color: colors.neutral[600],
   },
   headline: {
-    ...typography.bodySm,
-    color: colors.neutral[800],
+    ...typography.bodyMd,
+    color: colors.neutral[900],
     marginBottom: spacing.xs,
+    fontWeight: '500',
   },
   date: {
     ...typography.labelSm,
@@ -182,15 +192,12 @@ const styles = StyleSheet.create({
   emptyState: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: spacing.xxl * 2,
-  },
-  emptyEmoji: {
-    fontSize: 64,
-    marginBottom: spacing.md,
+    paddingVertical: spacing.xxl * 3,
   },
   emptyTitle: {
     ...typography.headingLg,
     color: colors.neutral[900],
+    marginTop: spacing.lg,
     marginBottom: spacing.sm,
   },
   emptySubtitle: {
@@ -198,5 +205,6 @@ const styles = StyleSheet.create({
     color: colors.neutral[500],
     textAlign: 'center',
     paddingHorizontal: spacing.xl,
+    lineHeight: 22,
   },
 });

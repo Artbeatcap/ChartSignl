@@ -1,12 +1,12 @@
-// Enhanced Analysis Route
-// Uses server-side technical calculations + AI interpretation
+// Enhanced Analysis Route - DATA ONLY VERSION
+// This version saves analyses to database without any image handling
 
 import { Hono } from 'hono';
 import OpenAI from 'openai';
 import { supabaseAdmin, getUserFromToken } from '../lib/supabase';
 import { FREE_ANALYSIS_LIMIT } from '@chartsignl/core';
 
-// Import our new modules
+// Import our technical analysis modules
 import {
   calculateAllIndicators,
   type MarketDataPoint,
@@ -85,282 +85,71 @@ function buildUserPrompt(
 
   const { supportLevels, resistanceLevels, confidence } = scoredAnalysis;
 
-  // Format top levels for the prompt
   const topSupport = supportLevels.slice(0, 3);
   const topResistance = resistanceLevels.slice(0, 3);
 
+  // Calculate EMA percentage differences from current price
+  const ema9Diff = ema.ema9 > 0 ? ((ema.ema9 - currentPrice) / currentPrice) * 100 : 0;
+  const ema21Diff = ema.ema21 > 0 ? ((ema.ema21 - currentPrice) / currentPrice) * 100 : 0;
+  const ema65Diff = ema.ema65 > 0 ? ((ema.ema65 - currentPrice) / currentPrice) * 100 : 0;
+
   return `Analyze ${symbol} on the ${timeframe} timeframe.
 
-## CURRENT STATE
-- Price: $${currentPrice.toFixed(2)}
-- Period Change: ${priceChangePercent >= 0 ? '+' : ''}${priceChangePercent.toFixed(2)}%
+CURRENT STATE:
+- Price: $${currentPrice.toFixed(2)} (${priceChangePercent > 0 ? '+' : ''}${priceChangePercent.toFixed(2)}%)
+- Trend: ${trend.direction} (${(trend.strength * 100).toFixed(0)}% strength)
+- Trading Bias: ${trend.tradingBias} - ${trend.biasReason}
 
-## TREND ANALYSIS
-- Direction: ${trend.direction}
-- Strength: ${trend.strength}/100
-- Trading Bias: ${trend.tradingBias}
-- Reason: ${trend.biasReason}
-- EMA Alignment: ${trend.emaAlignment}
+MOVING AVERAGES:
+- EMA 9: $${(ema.ema9 || 0).toFixed(2)} (${ema9Diff > 0 ? '+' : ''}${ema9Diff.toFixed(2)}%)
+- EMA 21: $${(ema.ema21 || 0).toFixed(2)} (${ema21Diff > 0 ? '+' : ''}${ema21Diff.toFixed(2)}%)
+- EMA 65: $${(ema.ema65 || 0).toFixed(2)} (${ema65Diff > 0 ? '+' : ''}${ema65Diff.toFixed(2)}%)
+- Alignment: ${trend.emaAlignment || 'mixed'}
 
-## KEY MOVING AVERAGES
-- EMA 9: $${ema.ema9.toFixed(2)} (price ${ema.values.find((v) => v.period === 9)?.pricePosition})
-- EMA 21: $${ema.ema21.toFixed(2)} (price ${ema.values.find((v) => v.period === 21)?.pricePosition})
-- EMA 200: $${ema.ema200.toFixed(2)} (price ${ema.values.find((v) => v.period === 200)?.pricePosition})
+VOLATILITY & MOMENTUM:
+- ATR: $${atr.atr.toFixed(2)} (${atr.atrPercent.toFixed(2)}% of price)
+- Bollinger Bands: Lower $${bollinger.lowerBand.toFixed(2)} | Middle $${bollinger.middleBand.toFixed(2)} | Upper $${bollinger.upperBand.toFixed(2)}
+- Band Position: ${(bollinger.percentB * 100).toFixed(1)}% (0% = lower band, 100% = upper band)
+- Overextension: ${overextension.status} - ${overextension.description}
 
-## VOLATILITY
-- ATR(10): $${atr.atr.toFixed(2)} (${atr.atrPercent.toFixed(2)}% of price)
-- Regime: ${atr.volatilityRegime}
+${fibonacci ? `FIBONACCI LEVELS (${fibonacci.swingDirection === 'up' ? 'retracement' : 'extension'} from ${fibonacci.swingHighDate} to ${fibonacci.swingLowDate}):
+- 0%: $${(fibonacci.swingDirection === 'up' ? fibonacci.swingLow : fibonacci.swingHigh).toFixed(2)}
+${fibonacci.levels.map((fib) => `- ${fib.label}: $${fib.price.toFixed(2)}`).join('\n')}
+- 100%: $${(fibonacci.swingDirection === 'up' ? fibonacci.swingHigh : fibonacci.swingLow).toFixed(2)}
+` : ''}
 
-## BOLLINGER BANDS
-- Upper: $${bollinger.upperBand.toFixed(2)}
-- Middle: $${bollinger.middleBand.toFixed(2)}
-- Lower: $${bollinger.lowerBand.toFixed(2)}
-- %B: ${(bollinger.percentB * 100).toFixed(1)}%
-- Squeeze: ${bollinger.squeeze ? 'YES - low volatility, breakout pending' : 'No'}
+TOP SUPPORT LEVELS (${supportLevels.length} total, showing top 3):
+${topSupport.map((l, i) => `${i + 1}. $${l.price.toFixed(2)} - ${l.strength} (${l.confluenceScore}% confluence, ${l.distancePercent.toFixed(2)}% away)
+   Factors: ${Object.entries(l.factors)
+     .filter(([_, v]) => v)
+     .map(([k]) => k)
+     .join(', ')}`).join('\n')}
 
-## EXTENSION STATUS
-- Distance from 21 EMA: ${overextension.distanceFromEma21Percent >= 0 ? '+' : ''}${overextension.distanceFromEma21Percent.toFixed(2)}%
-- ATR-Normalized: ${overextension.atrNormalizedDistance.toFixed(2)}
-- Status: ${overextension.status}
-- Signal: ${overextension.signalType}
+TOP RESISTANCE LEVELS (${resistanceLevels.length} total, showing top 3):
+${topResistance.map((l, i) => `${i + 1}. $${l.price.toFixed(2)} - ${l.strength} (${l.confluenceScore}% confluence, ${l.distancePercent.toFixed(2)}% away)
+   Factors: ${Object.entries(l.factors)
+     .filter(([_, v]) => v)
+     .map(([k]) => k)
+     .join(', ')}`).join('\n')}
 
-${
-  fibonacci
-    ? `## FIBONACCI LEVELS
-- Swing: $${fibonacci.swingLow.toFixed(2)} to $${fibonacci.swingHigh.toFixed(2)} (${fibonacci.swingDirection} move)
-- Current Retracement: ${(fibonacci.currentRetracement * 100).toFixed(1)}%
-- Key Fib Levels: ${fibonacci.levels.map((l) => `${l.label}: $${l.price.toFixed(2)}`).join(', ')}`
-    : '## FIBONACCI: Not calculated (timeframe too short)'
-}
+ANALYSIS CONFIDENCE: ${confidence.overall}% (${confidence.label})
+Factors affecting confidence:
+${confidence.factors.map(f => `- ${f.name}: ${f.impact > 0 ? '+' : ''}${f.impact}% - ${f.reason}`).join('\n')}
 
-## TOP SUPPORT LEVELS (scored by confluence)
-${topSupport
-  .map(
-    (l, i) =>
-      `${i + 1}. $${l.price.toFixed(2)} - Score: ${l.confluenceScore}/100 (${l.strength})
-   Zone: $${l.zone.low.toFixed(2)} - $${l.zone.high.toFixed(2)}
-   ${l.description}`
-  )
-  .join('\n')}
-
-## TOP RESISTANCE LEVELS (scored by confluence)
-${topResistance
-  .map(
-    (l, i) =>
-      `${i + 1}. $${l.price.toFixed(2)} - Score: ${l.confluenceScore}/100 (${l.strength})
-   Zone: $${l.zone.low.toFixed(2)} - $${l.zone.high.toFixed(2)}
-   ${l.description}`
-  )
-  .join('\n')}
-
-## OVERALL ANALYSIS CONFIDENCE: ${confidence.overall}% (${confidence.label})
-Factors: ${confidence.factors.map((f) => `${f.name}: ${f.impact > 0 ? '+' : ''}${f.impact}`).join(', ')}
-
-Based on this data, provide your analysis as JSON.`;
+Based on this data, provide your analysis focusing on the most actionable insights for a trader.`;
 }
 
 // ============================================================================
-// TECHNICAL DETAILS BUILDER
-// ============================================================================
-
-function buildTechnicalDetails(indicators: TechnicalIndicators): TechnicalDetails {
-  const { ema, atr, bollinger, overextension, fibonacci, volumeProfile, currentPrice } = indicators;
-
-  const summary: TechnicalDetailItem[] = [];
-
-  // Trend
-  const trendStatus =
-    indicators.trend.tradingBias === 'long'
-      ? 'bullish'
-      : indicators.trend.tradingBias === 'short'
-      ? 'bearish'
-      : 'neutral';
-  summary.push({
-    indicator: 'Trend',
-    value: indicators.trend.direction.replace(/_/g, ' '),
-    status: trendStatus,
-    statusLabel: indicators.trend.tradingBias === 'long' ? '🟢 Bullish' : indicators.trend.tradingBias === 'short' ? '🔴 Bearish' : '🟡 Neutral',
-  });
-
-  // EMA 21
-  const ema21Status = currentPrice > ema.ema21 ? 'bullish' : 'bearish';
-  summary.push({
-    indicator: 'EMA 21',
-    value: `$${ema.ema21.toFixed(2)}`,
-    status: ema21Status,
-    statusLabel: currentPrice > ema.ema21 ? '🟢 Price above' : '🔴 Price below',
-  });
-
-  // EMA 200
-  const ema200Status = currentPrice > ema.ema200 ? 'bullish' : 'bearish';
-  summary.push({
-    indicator: 'EMA 200',
-    value: `$${ema.ema200.toFixed(2)}`,
-    status: ema200Status,
-    statusLabel: currentPrice > ema.ema200 ? '🟢 Price above' : '🔴 Price below',
-  });
-
-  // ATR
-  const atrStatus = atr.volatilityRegime === 'high' ? 'warning' : 'neutral';
-  summary.push({
-    indicator: 'ATR (10)',
-    value: `$${atr.atr.toFixed(2)} (${atr.atrPercent.toFixed(1)}%)`,
-    status: atrStatus,
-    statusLabel:
-      atr.volatilityRegime === 'low'
-        ? '🟢 Low volatility'
-        : atr.volatilityRegime === 'high'
-        ? '🟡 High volatility'
-        : '⚪ Medium volatility',
-  });
-
-  // Bollinger
-  const bbStatus = bollinger.squeeze ? 'warning' : 'neutral';
-  summary.push({
-    indicator: 'Bollinger',
-    value: `${(bollinger.percentB * 100).toFixed(0)}% B`,
-    status: bbStatus,
-    statusLabel: bollinger.squeeze
-      ? '🟡 Squeeze'
-      : bollinger.position === 'upper_half'
-      ? '🟢 Upper half'
-      : bollinger.position === 'lower_half'
-      ? '🔴 Lower half'
-      : '⚪ Mid-range',
-  });
-
-  // Extension
-  const extStatus =
-    overextension.status === 'normal'
-      ? 'neutral'
-      : overextension.status === 'moderately_extended'
-      ? 'warning'
-      : 'bearish';
-  summary.push({
-    indicator: 'Extension',
-    value: `${overextension.distanceFromEma21Percent >= 0 ? '+' : ''}${overextension.distanceFromEma21Percent.toFixed(1)}% from 21 EMA`,
-    status: extStatus,
-    statusLabel:
-      overextension.status === 'normal'
-        ? '🟢 Normal'
-        : overextension.status === 'moderately_extended'
-        ? '🟡 Extended'
-        : '🔴 Overextended',
-  });
-
-  return {
-    summary,
-    raw: {
-      ema,
-      atr,
-      bollinger,
-      overextension,
-      fibonacci,
-      volumeProfile,
-    },
-  };
-}
-
-// ============================================================================
-// TRADE IDEAS BUILDER
-// ============================================================================
-
-function buildTradeIdeas(
-  indicators: TechnicalIndicators,
-  scoredAnalysis: ScoredAnalysis,
-  aiTradeIdeas: any[]
-): TradeIdea[] {
-  const { currentPrice, atr, trend } = indicators;
-  const { displayLevels, confidence } = scoredAnalysis;
-
-  const tradeIdeas: TradeIdea[] = [];
-
-  // Get the closest support and resistance
-  const primarySupport = displayLevels.support[0];
-  const primaryResistance = displayLevels.resistance[0];
-
-  // Build trade ideas based on trend and levels
-  if (trend.tradingBias === 'long' && primarySupport) {
-    const entryZone = primarySupport.zone;
-    const target = primaryResistance?.price || currentPrice * 1.05;
-    const stop = entryZone.low - atr.atr * 0.5;
-    const risk = entryZone.high - stop;
-    const reward = target - entryZone.high;
-    const rrRatio = risk > 0 ? reward / risk : 0;
-
-    tradeIdeas.push({
-      direction: 'long',
-      scenario: aiTradeIdeas[0]?.scenario || `Buy pullback to $${primarySupport.price.toFixed(2)} support`,
-      entryZone: {
-        low: Math.round(entryZone.low * 100) / 100,
-        high: Math.round(entryZone.high * 100) / 100,
-      },
-      target: Math.round(target * 100) / 100,
-      stop: Math.round(stop * 100) / 100,
-      riskRewardRatio: Math.round(rrRatio * 10) / 10,
-      confidence: aiTradeIdeas[0]?.confidence || confidence.overall,
-      invalidation: aiTradeIdeas[0]?.invalidation || `Daily close below $${stop.toFixed(2)}`,
-    });
-  }
-
-  if (trend.tradingBias === 'short' && primaryResistance) {
-    const entryZone = primaryResistance.zone;
-    const target = primarySupport?.price || currentPrice * 0.95;
-    const stop = entryZone.high + atr.atr * 0.5;
-    const risk = stop - entryZone.low;
-    const reward = entryZone.low - target;
-    const rrRatio = risk > 0 ? reward / risk : 0;
-
-    tradeIdeas.push({
-      direction: 'short',
-      scenario: aiTradeIdeas[0]?.scenario || `Sell rally to $${primaryResistance.price.toFixed(2)} resistance`,
-      entryZone: {
-        low: Math.round(entryZone.low * 100) / 100,
-        high: Math.round(entryZone.high * 100) / 100,
-      },
-      target: Math.round(target * 100) / 100,
-      stop: Math.round(stop * 100) / 100,
-      riskRewardRatio: Math.round(rrRatio * 10) / 10,
-      confidence: aiTradeIdeas[0]?.confidence || confidence.overall,
-      invalidation: aiTradeIdeas[0]?.invalidation || `Daily close above $${stop.toFixed(2)}`,
-    });
-  }
-
-  // If neutral, provide both directions
-  if (trend.tradingBias === 'neutral' && primarySupport && primaryResistance) {
-    tradeIdeas.push({
-      direction: 'long',
-      scenario: `Range trade: Buy at $${primarySupport.price.toFixed(2)} support`,
-      entryZone: primarySupport.zone,
-      target: primaryResistance.price,
-      stop: primarySupport.zone.low - atr.atr * 0.5,
-      riskRewardRatio: 2,
-      confidence: confidence.overall - 10,
-      invalidation: `Break below $${primarySupport.zone.low.toFixed(2)}`,
-    });
-
-    tradeIdeas.push({
-      direction: 'short',
-      scenario: `Range trade: Sell at $${primaryResistance.price.toFixed(2)} resistance`,
-      entryZone: primaryResistance.zone,
-      target: primarySupport.price,
-      stop: primaryResistance.zone.high + atr.atr * 0.5,
-      riskRewardRatio: 2,
-      confidence: confidence.overall - 10,
-      invalidation: `Break above $${primaryResistance.zone.high.toFixed(2)}`,
-    });
-  }
-
-  return tradeIdeas;
-}
-
-// ============================================================================
-// MAIN ROUTE HANDLER
+// MAIN ROUTE
 // ============================================================================
 
 analyzeDataRoute.post('/', async (c) => {
   try {
-    // Auth check
+    console.log('[Analysis] Request received');
+
+    // ========================================================================
+    // STEP 1: Authentication & Authorization
+    // ========================================================================
     const authHeader = c.req.header('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
       return c.json({ success: false, error: 'Missing authorization token' }, 401);
@@ -373,25 +162,33 @@ analyzeDataRoute.post('/', async (c) => {
       return c.json({ success: false, error: 'Invalid authorization token' }, 401);
     }
 
-    // Usage check
+    // Get user profile
     const { data: profile } = await supabaseAdmin
       .from('profiles')
       .select('is_pro')
       .eq('id', userId)
       .single();
 
+    // Check usage limits
     const { data: usage } = await supabaseAdmin
       .from('usage_counters')
       .select('free_analyses_used')
       .eq('user_id', userId)
       .single();
 
-    const canAnalyze = profile?.is_pro || (usage?.free_analyses_used || 0) < FREE_ANALYSIS_LIMIT;
-    if (!canAnalyze) {
-      return c.json({ success: false, error: 'Free analysis limit reached' }, 403);
+    if (!profile?.is_pro && (usage?.free_analyses_used || 0) >= FREE_ANALYSIS_LIMIT) {
+      return c.json(
+        {
+          success: false,
+          error: `Free tier limit reached (${FREE_ANALYSIS_LIMIT} analyses). Please upgrade to Pro.`,
+        },
+        403
+      );
     }
 
-    // Get request body
+    // ========================================================================
+    // STEP 2: Parse request data
+    // ========================================================================
     const body = await c.req.json();
     const { symbol, interval, data } = body as {
       symbol: string;
@@ -399,14 +196,14 @@ analyzeDataRoute.post('/', async (c) => {
       data: MarketDataPoint[];
     };
 
-    if (!data || data.length < 20) {
-      return c.json({ success: false, error: 'Insufficient data for analysis (need at least 20 bars)' }, 400);
+    if (!symbol || !interval || !Array.isArray(data) || data.length === 0) {
+      return c.json({ success: false, error: 'Missing required fields' }, 400);
     }
 
-    console.log(`[Analysis] Starting enhanced analysis for ${symbol} (${interval}), ${data.length} bars`);
+    console.log(`[Analysis] Analyzing ${symbol} (${interval}) with ${data.length} data points`);
 
     // ========================================================================
-    // STEP 1: Calculate all technical indicators
+    // STEP 3: Calculate technical indicators
     // ========================================================================
     const indicators = calculateAllIndicators(data, symbol, interval);
 
@@ -416,83 +213,146 @@ analyzeDataRoute.post('/', async (c) => {
 
     console.log(`[Analysis] Indicators calculated:`, {
       trend: indicators.trend.direction,
-      atr: indicators.atr.atr.toFixed(2),
-      swingPoints: indicators.swingPoints.length,
+      emaAlignment: indicators.trend.emaAlignment,
+      overextension: indicators.overextension.status,
     });
 
     // ========================================================================
-    // STEP 2: Score and select support/resistance levels
+    // STEP 4: Score levels with confluence
     // ========================================================================
     const scoredAnalysis = scoreLevels(indicators);
+    const expandedLevels = getExpandedLevels(scoredAnalysis, indicators.currentPrice);
 
     console.log(`[Analysis] Levels scored:`, {
-      support: scoredAnalysis.supportLevels.length,
-      resistance: scoredAnalysis.resistanceLevels.length,
+      support: scoredAnalysis.displayLevels.support.length,
+      resistance: scoredAnalysis.displayLevels.resistance.length,
       confidence: scoredAnalysis.confidence.overall,
     });
 
     // ========================================================================
-    // STEP 3: Call OpenAI for interpretation
+    // STEP 5: Get AI interpretation
     // ========================================================================
-    let aiResponse: {
+    const userPrompt = buildUserPrompt(symbol, interval, indicators, scoredAnalysis);
+
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user', content: userPrompt },
+      ],
+      temperature: 0.3,
+      response_format: { type: 'json_object' },
+    });
+
+    const aiResponseText = completion.choices[0]?.message?.content;
+    if (!aiResponseText) {
+      throw new Error('No response from AI');
+    }
+
+    const aiResponse = JSON.parse(aiResponseText) as {
       headline: string;
       summary: string;
       keyObservations: string[];
-      tradeIdeas: any[];
+      tradeIdeas: Array<{
+        direction: 'long' | 'short';
+        scenario: string;
+        confidence: number;
+        invalidation: string;
+      }>;
       riskFactors: string[];
-    } = {
-      headline: '',
-      summary: '',
-      keyObservations: [],
-      tradeIdeas: [],
-      riskFactors: [],
     };
 
-    try {
-      const userPrompt = buildUserPrompt(symbol, interval, indicators, scoredAnalysis);
+    // ========================================================================
+    // STEP 6: Build complete analysis response
+    // ========================================================================
+    
+    // Build trade ideas with proper zones
+    const tradeIdeas: TradeIdea[] = aiResponse.tradeIdeas.map((idea) => {
+      const isLong = idea.direction === 'long';
+      const entryLevels = isLong ? scoredAnalysis.supportLevels : scoredAnalysis.resistanceLevels;
+      const targetLevels = isLong ? scoredAnalysis.resistanceLevels : scoredAnalysis.supportLevels;
 
-      const response = await openai.chat.completions.create({
-        model: 'gpt-4o', // Using GPT-4o for better interpretation
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: userPrompt },
-        ],
-        max_tokens: 1500,
-        temperature: 0.3,
-      });
+      const entry = entryLevels[0];
+      const target = targetLevels[0];
 
-      const content = response.choices[0]?.message?.content;
-
-      if (content) {
-        // Parse JSON response
-        let cleaned = content.trim();
-        if (cleaned.startsWith('```json')) cleaned = cleaned.slice(7);
-        if (cleaned.startsWith('```')) cleaned = cleaned.slice(3);
-        if (cleaned.endsWith('```')) cleaned = cleaned.slice(0, -3);
-
-        try {
-          aiResponse = JSON.parse(cleaned.trim());
-        } catch (parseError) {
-          console.error('[Analysis] Failed to parse AI response:', content);
-          // Continue with defaults
-        }
+      if (!entry || !target) {
+        return {
+          direction: idea.direction,
+          scenario: idea.scenario,
+          entryZone: {
+            low: indicators.currentPrice * 0.98,
+            high: indicators.currentPrice * 1.02,
+          },
+          target: indicators.currentPrice * (isLong ? 1.05 : 0.95),
+          stop: indicators.currentPrice * (isLong ? 0.97 : 1.03),
+          riskRewardRatio: 1.5,
+          confidence: idea.confidence,
+          invalidation: idea.invalidation,
+        };
       }
-    } catch (aiError) {
-      console.error('[Analysis] OpenAI error:', aiError);
-      // Continue with defaults - we still have the calculated data
-    }
 
-    // ========================================================================
-    // STEP 4: Build the final response
-    // ========================================================================
-    const technicalDetails = buildTechnicalDetails(indicators);
-    const tradeIdeas = buildTradeIdeas(indicators, scoredAnalysis, aiResponse.tradeIdeas || []);
-    const expandedLevels = getExpandedLevels(scoredAnalysis, indicators.currentPrice);
+      const entryPrice = entry.price;
+      const targetPrice = target.price;
+      const stopDistance = indicators.atr.atr * 2;
+      const stopPrice = isLong ? entryPrice - stopDistance : entryPrice + stopDistance;
+      const risk = Math.abs(entryPrice - stopPrice);
+      const reward = Math.abs(targetPrice - entryPrice);
+      const rr = reward / risk;
+
+      return {
+        direction: idea.direction,
+        scenario: idea.scenario,
+        entryZone: entry.zone,
+        target: targetPrice,
+        stop: stopPrice,
+        riskRewardRatio: parseFloat(rr.toFixed(2)),
+        confidence: idea.confidence,
+        invalidation: idea.invalidation,
+      };
+    });
+
+    // Build technical details
+    const technicalDetails: TechnicalDetails = {
+      summary: [
+        {
+          indicator: 'Trend',
+          value: `${indicators.trend.direction} (${(indicators.trend.strength * 100).toFixed(0)}%)`,
+          status: indicators.trend.tradingBias === 'long' ? 'bullish' : indicators.trend.tradingBias === 'short' ? 'bearish' : 'neutral',
+          statusLabel: indicators.trend.biasReason,
+        },
+        {
+          indicator: 'EMA Alignment',
+          value: indicators.trend.emaAlignment,
+          status: indicators.trend.emaAlignment.includes('bullish') ? 'bullish' : indicators.trend.emaAlignment.includes('bearish') ? 'bearish' : 'neutral',
+          statusLabel: `9: ${indicators.ema.ema9.toFixed(2)}, 21: ${indicators.ema.ema21.toFixed(2)}, 65: ${indicators.ema.ema65.toFixed(2)}`,
+        },
+        {
+          indicator: 'Volatility (ATR)',
+          value: `${indicators.atr.atrPercent.toFixed(2)}%`,
+          status: indicators.atr.atrPercent > 3 ? 'warning' : 'neutral',
+          statusLabel: `$${indicators.atr.atr.toFixed(2)} average range`,
+        },
+        {
+          indicator: 'Bollinger Position',
+          value: `${(indicators.bollinger.percentB * 100).toFixed(0)}%`,
+          status: indicators.bollinger.percentB > 0.8 ? 'warning' : indicators.bollinger.percentB < 0.2 ? 'warning' : 'neutral',
+          statusLabel: indicators.bollinger.percentB > 0.8 ? 'Near upper band' : indicators.bollinger.percentB < 0.2 ? 'Near lower band' : 'Mid-range',
+        },
+      ],
+      raw: {
+        ema: indicators.ema,
+        atr: indicators.atr,
+        bollinger: indicators.bollinger,
+        overextension: indicators.overextension,
+        fibonacci: indicators.fibonacci,
+        volumeProfile: indicators.volumeProfile,
+      },
+    };
 
     // Build overextension description
-    let overextensionDescription = '';
+    let overextensionDescription: string;
     if (indicators.overextension.status === 'normal') {
-      overextensionDescription = 'Price is within normal range of the 21 EMA.';
+      overextensionDescription = 'Price is trading near the 21 EMA. No overextension detected.';
     } else if (indicators.overextension.status === 'moderately_extended') {
       overextensionDescription = `Price is moderately extended ${indicators.overextension.direction} the 21 EMA. A pullback may be healthy.`;
     } else if (indicators.overextension.status === 'overextended') {
@@ -543,7 +403,31 @@ analyzeDataRoute.post('/', async (c) => {
     };
 
     // ========================================================================
-    // STEP 5: Update usage counter
+    // STEP 7: SAVE TO DATABASE
+    // ========================================================================
+    const { data: savedAnalysis, error: saveError } = await supabaseAdmin
+      .from('chart_analyses')
+      .insert({
+        user_id: userId,
+        symbol: symbol,
+        timeframe: interval,
+        analysis_json: analysis,
+        headline: analysis.headline,
+        trend_type: analysis.trend.direction,
+        level_count: analysis.supportLevels.length + analysis.resistanceLevels.length,
+      })
+      .select('id')
+      .single();
+
+    if (saveError) {
+      console.error('[Analysis] Database save error:', saveError);
+      // Don't fail the request - the analysis was successful
+    } else {
+      console.log('[Analysis] Saved to database with ID:', savedAnalysis?.id);
+    }
+
+    // ========================================================================
+    // STEP 8: Update usage counter
     // ========================================================================
     if (!profile?.is_pro) {
       await supabaseAdmin
@@ -559,15 +443,21 @@ analyzeDataRoute.post('/', async (c) => {
       confidence: analysis.overallConfidence,
       supportLevels: analysis.supportLevels.length,
       resistanceLevels: analysis.resistanceLevels.length,
+      savedToDb: !saveError,
     });
 
-    return c.json({ success: true, analysis });
+    return c.json({ 
+      success: true, 
+      analysis,
+      analysisId: savedAnalysis?.id,
+    });
+    
   } catch (error) {
     console.error('[Analysis] Error:', error);
     return c.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Analysis failed',
+        error: error instanceof Error ? error.message : 'Internal server error',
       },
       500
     );

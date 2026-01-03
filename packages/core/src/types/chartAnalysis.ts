@@ -157,7 +157,6 @@ export interface ChartAnalysis {
 export interface AnalysisResponse {
   success: boolean;
   data?: ChartAnalysis;
-  imageUrl?: string;
   analysisId?: string;
   error?: string;
 }
@@ -166,7 +165,6 @@ export interface AnalysisResponse {
 export interface AnalysisHistoryItem {
   id: string;
   createdAt: string;
-  imageUrl: string;
   symbol: string | null;
   timeframe: TimeframeType;
   headline: string;

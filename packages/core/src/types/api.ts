@@ -18,7 +18,6 @@ export interface AnalyzeChartRequest {
 export interface AnalyzeChartResponse {
   success: boolean;
   analysisId?: string;
-  imageUrl?: string;
   analysis?: ChartAnalysis;
   error?: string;
 }
@@ -41,7 +40,6 @@ export interface GetHistoryResponse {
 export interface GetAnalysisResponse {
   success: boolean;
   analysis?: ChartAnalysis;
-  imageUrl?: string;
   createdAt?: string;
   error?: string;
 }

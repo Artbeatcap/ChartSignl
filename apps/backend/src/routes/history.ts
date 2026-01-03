@@ -1,3 +1,5 @@
+// History Route - Simplified (No Images)
+
 import { Hono } from 'hono';
 import { supabaseAdmin, getUserFromToken } from '../lib/supabase';
 import type { GetHistoryResponse, GetAnalysisResponse, AnalysisHistoryItem } from '@chartsignl/core';
@@ -31,10 +33,10 @@ historyRoute.get('/', async (c) => {
     const limit = Math.min(parseInt(c.req.query('limit') || '20'), 50);
     const offset = (page - 1) * limit;
 
-    // Fetch analyses
+    // Fetch analyses (no image_url needed)
     const { data: analyses, error, count } = await supabaseAdmin
       .from('chart_analyses')
-      .select('id, created_at, image_url, symbol, timeframe, headline', { count: 'exact' })
+      .select('id, created_at, symbol, timeframe, headline', { count: 'exact' })
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
@@ -47,11 +49,10 @@ historyRoute.get('/', async (c) => {
       }, 500);
     }
 
-    // Transform to response format
+    // Transform to response format (no imageUrl)
     const historyItems: AnalysisHistoryItem[] = (analyses || []).map((a) => ({
       id: a.id,
       createdAt: a.created_at,
-      imageUrl: a.image_url,
       symbol: a.symbol,
       timeframe: a.timeframe,
       headline: a.headline || 'Chart analysis',
@@ -96,11 +97,12 @@ historyRoute.get('/:id', async (c) => {
 
     const analysisId = c.req.param('id');
 
+    // Fetch the analysis (no image_url)
     const { data: analysis, error } = await supabaseAdmin
       .from('chart_analyses')
-      .select('*')
+      .select('analysis_json, created_at')
       .eq('id', analysisId)
-      .eq('user_id', userId) // Ensure user owns this analysis
+      .eq('user_id', userId)
       .single();
 
     if (error || !analysis) {
@@ -113,7 +115,6 @@ historyRoute.get('/:id', async (c) => {
     return c.json<GetAnalysisResponse>({
       success: true,
       analysis: analysis.analysis_json,
-      imageUrl: analysis.image_url,
       createdAt: analysis.created_at,
     });
 
@@ -143,26 +144,7 @@ historyRoute.delete('/:id', async (c) => {
 
     const analysisId = c.req.param('id');
 
-    // Get the analysis first to get the image path
-    const { data: analysis } = await supabaseAdmin
-      .from('chart_analyses')
-      .select('image_path')
-      .eq('id', analysisId)
-      .eq('user_id', userId)
-      .single();
-
-    if (!analysis) {
-      return c.json({ success: false, error: 'Analysis not found' }, 404);
-    }
-
-    // Delete from storage if path exists
-    if (analysis.image_path) {
-      await supabaseAdmin.storage
-        .from('chart_uploads')
-        .remove([analysis.image_path]);
-    }
-
-    // Delete from database
+    // Delete from database (no storage cleanup needed)
     const { error } = await supabaseAdmin
       .from('chart_analyses')
       .delete()

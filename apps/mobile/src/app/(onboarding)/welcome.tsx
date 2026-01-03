@@ -14,10 +14,11 @@ export default function WelcomeScreen() {
       <View style={styles.content}>
         {/* Hero section */}
         <View style={styles.heroSection}>
+          <Text style={styles.brandName}>ChartSignl</Text>
           <Text style={styles.emoji}>📊</Text>
           <Text style={styles.title}>Levels shouldn't{'\n'}feel like guesswork</Text>
           <Text style={styles.subtitle}>
-            Upload any chart. Get the key levels instantly. 
+            Search any stock. Get the key levels instantly. 
             Trade with more clarity and less stress.
           </Text>
         </View>
@@ -92,6 +93,13 @@ const styles = StyleSheet.create({
   heroSection: {
     alignItems: 'center',
     marginBottom: spacing.xl,
+  },
+  brandName: {
+    ...typography.displaySm,
+    color: colors.primary[600],
+    fontWeight: '700',
+    marginBottom: spacing.md,
+    letterSpacing: -0.5,
   },
   emoji: {
     fontSize: 64,

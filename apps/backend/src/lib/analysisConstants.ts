@@ -176,3 +176,4 @@ export type VolatilityRegime = 'low' | 'medium' | 'high';
 export type StrengthLevel = 'strong' | 'medium' | 'weak';
 export type TimeframeCategory = 'intraday' | 'daily' | 'weekly';
 
+

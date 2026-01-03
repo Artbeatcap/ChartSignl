@@ -16,18 +16,19 @@ interface InputProps extends TextInputProps {
   containerStyle?: ViewStyle;
 }
 
-export function Input({
+export const Input = React.forwardRef<TextInput, InputProps>(({
   label,
   error,
   hint,
   containerStyle,
   style,
   ...props
-}: InputProps) {
+}, ref) => {
   return (
     <View style={[styles.container, containerStyle]}>
       {label && <Text style={styles.label}>{label}</Text>}
       <TextInput
+        ref={ref}
         style={[
           styles.input,
           error && styles.inputError,
@@ -40,7 +41,9 @@ export function Input({
       {hint && !error && <Text style={styles.hint}>{hint}</Text>}
     </View>
   );
-}
+});
+
+Input.displayName = 'Input';
 
 const styles = StyleSheet.create({
   container: {

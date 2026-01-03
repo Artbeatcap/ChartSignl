@@ -1,6 +1,5 @@
 import { getAccessToken } from './supabase';
 import type {
-  AnalyzeChartResponse,
   GetHistoryResponse,
   GetAnalysisResponse,
   UsageResponse,
@@ -34,99 +33,6 @@ async function apiFetch<T>(
   }
 
   return response.json();
-}
-
-// Analyze a chart from base64 image URI (from ViewShot capture)
-export async function analyzeChartBase64(
-  imageUri: string,
-  symbol?: string,
-  interval?: string
-): Promise<AnalyzeChartResponse> {
-  const token = await getAccessToken();
-  
-  if (!token) {
-    throw new Error('Not authenticated');
-  }
-
-  // Convert URI to base64 if needed
-  let base64Data: string;
-  
-  if (imageUri.startsWith('data:')) {
-    // Already base64
-    base64Data = imageUri;
-  } else if (imageUri.startsWith('file://') || imageUri.startsWith('/')) {
-    // File URI - need to read and convert
-    const response = await fetch(imageUri);
-    const blob = await response.blob();
-    base64Data = await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result as string);
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
-  } else {
-    // Assume it's already a usable URI
-    base64Data = imageUri;
-  }
-
-  const apiResponse = await fetch(`${API_URL}/api/analyze-chart`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      image: base64Data,
-      symbol: symbol,
-      interval: interval,
-    }),
-  });
-
-  const data = await apiResponse.json();
-  
-  if (!apiResponse.ok) {
-    throw new Error(data.error || 'Failed to analyze chart');
-  }
-
-  return data;
-}
-
-// Legacy: Analyze a chart image from file URI
-export async function analyzeChart(imageUri: string): Promise<AnalyzeChartResponse> {
-  const token = await getAccessToken();
-  
-  if (!token) {
-    throw new Error('Not authenticated');
-  }
-
-  // Create form data
-  const formData = new FormData();
-  
-  // Handle different URI formats (file://, data:, etc.)
-  const uriParts = imageUri.split('.');
-  const fileType = uriParts[uriParts.length - 1];
-  
-  formData.append('file', {
-    uri: imageUri,
-    name: `chart.${fileType}`,
-    type: `image/${fileType === 'jpg' ? 'jpeg' : fileType}`,
-  } as unknown as Blob);
-
-  const response = await fetch(`${API_URL}/api/analyze-chart`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-    body: formData,
-  });
-
-  const data = await response.json();
-  
-  if (!response.ok) {
-    throw new Error(data.error || 'Failed to analyze chart');
-  }
-
-  return data;
 }
 
 // Get analysis history

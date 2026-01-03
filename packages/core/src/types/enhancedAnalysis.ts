@@ -245,5 +245,6 @@ export interface EnhancedAnalysisResponse {
   success: boolean;
   error?: string;
   analysis?: EnhancedAIAnalysis;
+  analysisId?: string;
 }
 
