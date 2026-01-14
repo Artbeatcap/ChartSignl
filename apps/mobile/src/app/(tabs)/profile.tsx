@@ -1,16 +1,18 @@
 import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Alert, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Ionicons } from '@expo/vector-icons';
 import { Card, Button } from '../../components';
 import { useAuthStore } from '../../store/authStore';
 import { getCurrentUser, getUsage } from '../../lib/api';
 import { colors, typography, spacing, borderRadius, shadows } from '../../theme';
 import { FREE_ANALYSIS_LIMIT, TRADING_STYLE_LABELS } from '@chartsignl/core';
+import { useEffect } from 'react';
 
 export default function ProfileScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { user, signOut } = useAuthStore();
+  const { user, signOut, isPremium, checkSubscriptionStatus } = useAuthStore();
 
   const { data: profileData } = useQuery({
     queryKey: ['profile'],
@@ -24,6 +26,17 @@ export default function ProfileScreen() {
 
   const profile = profileData?.user;
   const usage = usageData;
+
+  useEffect(() => {
+    // Check subscription status on mount
+    if (user) {
+      checkSubscriptionStatus();
+    }
+  }, [user, checkSubscriptionStatus]);
+
+  const handleUpgrade = () => {
+    router.push('/premium');
+  };
 
   const handleSignOut = async () => {
     // On web, Alert.alert callbacks don't work reliably, so sign out directly
@@ -63,10 +76,6 @@ export default function ProfileScreen() {
     );
   };
 
-  const handleUpgrade = () => {
-    Alert.alert('Coming Soon', 'Pro subscription will be available soon!');
-  };
-
   const handleEditProfile = () => {
     router.push('/(settings)/edit-profile');
   };
@@ -100,6 +109,42 @@ export default function ProfileScreen() {
           <Text style={styles.name}>{profile?.displayName || 'Trader'}</Text>
           <Text style={styles.email}>{user?.email}</Text>
         </View>
+
+        {/* Premium Upgrade Card */}
+        {!isPremium ? (
+          <Card style={styles.upgradeCard}>
+            <View style={styles.upgradeContent}>
+              <View style={styles.upgradeIconContainer}>
+                <Ionicons name="star" size={32} color={colors.primary[600]} />
+              </View>
+              <View style={styles.upgradeTextContainer}>
+                <Text style={styles.upgradeTitle}>Upgrade to Premium</Text>
+                <Text style={styles.upgradeDescription}>
+                  Get unlimited analysis and advanced features
+                </Text>
+              </View>
+            </View>
+            <Button
+              title="View Premium Features"
+              onPress={handleUpgrade}
+              variant="primary"
+              fullWidth
+              style={styles.upgradeButton}
+            />
+          </Card>
+        ) : (
+          <Card style={styles.premiumActiveCard}>
+            <View style={styles.premiumActiveContent}>
+              <View style={styles.premiumBadge}>
+                <Ionicons name="star" size={20} color={colors.primary[500]} />
+                <Text style={styles.premiumBadgeText}>Premium</Text>
+              </View>
+              <Text style={styles.premiumActiveText}>
+                Premium Active - You have access to all premium features
+              </Text>
+            </View>
+          </Card>
+        )}
 
         {/* Usage Card */}
         <Card style={styles.usageCard}>
@@ -237,6 +282,75 @@ const styles = StyleSheet.create({
   email: {
     ...typography.bodyMd,
     color: colors.neutral[500],
+  },
+  // Upgrade card
+  upgradeCard: {
+    backgroundColor: colors.primary[50],
+    borderWidth: 2,
+    borderColor: colors.primary[200],
+    marginBottom: spacing.md,
+    padding: spacing.lg,
+  },
+  upgradeContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  upgradeIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: colors.primary[100],
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.md,
+  },
+  upgradeTextContainer: {
+    flex: 1,
+  },
+  upgradeTitle: {
+    ...typography.headingMd,
+    color: colors.primary[700],
+    marginBottom: spacing.xs,
+  },
+  upgradeDescription: {
+    ...typography.bodyMd,
+    color: colors.primary[600],
+  },
+  upgradeButton: {
+    marginTop: spacing.sm,
+  },
+  // Premium active card
+  premiumActiveCard: {
+    backgroundColor: colors.surface,
+    borderWidth: 2,
+    borderColor: colors.primary[300],
+    marginBottom: spacing.md,
+    padding: spacing.lg,
+  },
+  premiumActiveContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  premiumBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.primary[50],
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.full,
+    marginRight: spacing.md,
+  },
+  premiumBadgeText: {
+    ...typography.labelMd,
+    color: colors.primary[600],
+    marginLeft: spacing.xs,
+    fontWeight: '600',
+  },
+  premiumActiveText: {
+    ...typography.bodyMd,
+    color: colors.neutral[700],
+    flex: 1,
   },
   // Usage card
   usageCard: {
