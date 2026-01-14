@@ -808,3 +808,4 @@ export function calculateAllIndicators(
 }
 
 
+

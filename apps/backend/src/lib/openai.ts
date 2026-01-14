@@ -21,7 +21,7 @@ export interface VisionAnalysisResult {
 export async function analyzeChartWithVision(imageUrl: string): Promise<VisionAnalysisResult> {
   try {
     const response = await openai.chat.completions.create({
-      model: 'gpt-4o', // GPT-4 Vision
+      model: 'gpt-5-mini', // Change from 'gpt-4o'
       messages: [
         {
           role: 'system',
@@ -120,7 +120,7 @@ export async function analyzeChartFromBase64(
 ): Promise<VisionAnalysisResult> {
   try {
     const response = await openai.chat.completions.create({
-      model: 'gpt-4o',
+      model: 'gpt-5-mini', // Change from 'gpt-4o'
       messages: [
         {
           role: 'system',

@@ -16,7 +16,7 @@ interface AuthState {
   // Actions
   setSession: (session: Session | null) => void;
   initialize: () => Promise<void>;
-  signOut: () => Promise<void>;
+  signOut: () => Promise<boolean>;
   checkSubscriptionStatus: () => Promise<boolean>;
   refreshSubscription: () => Promise<void>;
   checkEmailVerification: () => Promise<boolean>;
@@ -211,23 +211,37 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
-  signOut: async () => {
+  signOut: async (): Promise<boolean> => {
     try {
-      // Lazy import to avoid loading during config evaluation
-      const Purchases = (await import('react-native-purchases')).default;
-      // Log out from RevenueCat
-      await Purchases.logOut();
+      // Log out from RevenueCat first
+      try {
+        const Purchases = (await import('react-native-purchases')).default;
+        await Purchases.logOut();
+      } catch (rcError) {
+        console.log('RevenueCat logout skipped (not initialized or error):', rcError);
+        // Continue with sign out even if RevenueCat fails
+      }
+      
+      // Sign out from Supabase
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        console.error('Supabase signOut error:', error);
+        return false;
+      }
+      
+      // Clear local state
+      set({
+        session: null,
+        user: null,
+        isPremium: false,
+        isEmailVerified: true,
+        showEmailVerificationModal: false,
+      });
+      
+      return true;
     } catch (error) {
-      console.error('Error logging out from RevenueCat:', error);
+      console.error('SignOut error:', error);
+      return false;
     }
-    
-    await supabase.auth.signOut();
-    set({
-      session: null,
-      user: null,
-      isPremium: false,
-      isEmailVerified: true,
-      showEmailVerificationModal: false,
-    });
   },
 }));

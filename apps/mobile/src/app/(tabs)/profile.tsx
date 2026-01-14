@@ -38,17 +38,31 @@ export default function ProfileScreen() {
     router.push('/premium');
   };
 
-  const handleSignOut = async () => {
-    // On web, Alert.alert callbacks don't work reliably, so sign out directly
-    if (Platform.OS === 'web') {
-      try {
+  const performSignOut = async () => {
+    try {
+      const success = await signOut();
+      
+      if (success) {
+        // Clear React Query cache after successful sign out
         queryClient.clear();
-        await signOut();
-        router.replace('/');
-      } catch (error) {
-        console.error('Sign out error:', error);
+        
+        // Use setTimeout to ensure state updates have propagated
+        setTimeout(() => {
+          router.replace('/');
+        }, 100);
+      } else {
         Alert.alert('Error', 'Failed to sign out. Please try again.');
       }
+    } catch (error) {
+      console.error('Sign out error:', error);
+      Alert.alert('Error', 'Failed to sign out. Please try again.');
+    }
+  };
+
+  const handleSignOut = () => {
+    // On web, Alert.alert callbacks don't work reliably
+    if (Platform.OS === 'web') {
+      performSignOut();
       return;
     }
 
@@ -61,16 +75,7 @@ export default function ProfileScreen() {
         {
           text: 'Sign Out',
           style: 'destructive',
-          onPress: async () => {
-            try {
-              queryClient.clear();
-              await signOut();
-              router.replace('/');
-            } catch (error) {
-              console.error('Sign out error:', error);
-              Alert.alert('Error', 'Failed to sign out. Please try again.');
-            }
-          },
+          onPress: performSignOut, // Pass function reference, not async inline
         },
       ]
     );
