@@ -2,9 +2,8 @@ import { create } from 'zustand';
 import type {
   OnboardingAnswers,
   TradingStyle,
-  InstrumentType,
-  PainPoint,
-  TradingGoal,
+  ExperienceLevel,
+  StressReducer,
 } from '@chartsignl/core';
 
 interface OnboardingState {
@@ -14,10 +13,8 @@ interface OnboardingState {
   
   // Actions
   setTradingStyle: (style: TradingStyle) => void;
-  toggleInstrument: (instrument: InstrumentType) => void;
-  togglePainPoint: (painPoint: PainPoint) => void;
-  toggleGoal: (goal: TradingGoal) => void;
-  setCommitment: (commitment: string) => void;
+  setExperienceLevel: (level: ExperienceLevel) => void;
+  setStressReducer: (reducer: StressReducer) => void;
   setDisplayName: (name: string) => void;
   nextStep: () => void;
   prevStep: () => void;
@@ -27,50 +24,29 @@ interface OnboardingState {
 
 const initialAnswers: OnboardingAnswers = {
   tradingStyle: null,
-  instruments: [],
-  painPoints: [],
-  goals: [],
-  commitment: '',
+  experienceLevel: null,
+  stressReducer: null,
   displayName: '',
 };
 
 export const useOnboardingStore = create<OnboardingState>((set) => ({
   answers: initialAnswers,
   currentStep: 0,
-  totalSteps: 6, // Welcome, Style, Instruments, PainPoints, Goals, Commitment
+  totalSteps: 5, // Welcome, Style, Experience, StressReducer, Account
 
   setTradingStyle: (style) =>
     set((state) => ({
       answers: { ...state.answers, tradingStyle: style },
     })),
 
-  toggleInstrument: (instrument) =>
-    set((state) => {
-      const instruments = state.answers.instruments.includes(instrument)
-        ? state.answers.instruments.filter((i) => i !== instrument)
-        : [...state.answers.instruments, instrument];
-      return { answers: { ...state.answers, instruments } };
-    }),
-
-  togglePainPoint: (painPoint) =>
-    set((state) => {
-      const painPoints = state.answers.painPoints.includes(painPoint)
-        ? state.answers.painPoints.filter((p) => p !== painPoint)
-        : [...state.answers.painPoints, painPoint];
-      return { answers: { ...state.answers, painPoints } };
-    }),
-
-  toggleGoal: (goal) =>
-    set((state) => {
-      const goals = state.answers.goals.includes(goal)
-        ? state.answers.goals.filter((g) => g !== goal)
-        : [...state.answers.goals, goal];
-      return { answers: { ...state.answers, goals } };
-    }),
-
-  setCommitment: (commitment) =>
+  setExperienceLevel: (level) =>
     set((state) => ({
-      answers: { ...state.answers, commitment },
+      answers: { ...state.answers, experienceLevel: level },
+    })),
+
+  setStressReducer: (reducer) =>
+    set((state) => ({
+      answers: { ...state.answers, stressReducer: reducer },
     })),
 
   setDisplayName: (displayName) =>

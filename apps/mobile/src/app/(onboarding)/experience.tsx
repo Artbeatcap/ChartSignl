@@ -3,15 +3,14 @@ import { useRouter } from 'expo-router';
 import { Button, ProgressIndicator } from '../../components';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { colors, typography, spacing, borderRadius, shadows } from '../../theme';
-import type { TradingStyle } from '@chartsignl/core';
-import { TRADING_STYLE_OPTIONS } from '@chartsignl/core';
+import { EXPERIENCE_LEVEL_OPTIONS } from '@chartsignl/core';
 
-export default function StyleScreen() {
+export default function ExperienceScreen() {
   const router = useRouter();
-  const { answers, setTradingStyle } = useOnboardingStore();
+  const { answers, setExperienceLevel } = useOnboardingStore();
 
   const handleContinue = () => {
-    router.push('/(onboarding)/experience');
+    router.push('/(onboarding)/stress-reducer');
   };
 
   return (
@@ -21,7 +20,7 @@ export default function StyleScreen() {
         <TouchableOpacity onPress={() => router.back()}>
           <Text style={styles.backButton}>←</Text>
         </TouchableOpacity>
-        <ProgressIndicator current={1} total={4} />
+        <ProgressIndicator current={2} total={4} />
       </View>
 
       <ScrollView
@@ -31,37 +30,37 @@ export default function StyleScreen() {
       >
         {/* Title */}
         <View style={styles.titleSection}>
-          <Text style={styles.title}>How do you typically trade?</Text>
+          <Text style={styles.title}>How familiar are you with technical analysis?</Text>
           <Text style={styles.subtitle}>
-            We'll prioritize levels that match your timeframe.
+            We'll adjust our explanations to match your level.
           </Text>
         </View>
 
         {/* Options */}
         <View style={styles.optionsContainer}>
-          {TRADING_STYLE_OPTIONS.map((style) => (
+          {EXPERIENCE_LEVEL_OPTIONS.map((level) => (
             <TouchableOpacity
-              key={style.value}
+              key={level.value}
               style={[
                 styles.optionCard,
-                answers.tradingStyle === style.value && styles.optionCardSelected,
+                answers.experienceLevel === level.value && styles.optionCardSelected,
               ]}
-              onPress={() => setTradingStyle(style.value)}
+              onPress={() => setExperienceLevel(level.value)}
               activeOpacity={0.7}
             >
-              <Text style={styles.optionEmoji}>{style.emoji}</Text>
+              <Text style={styles.optionEmoji}>{level.emoji}</Text>
               <View style={styles.optionContent}>
                 <Text
                   style={[
                     styles.optionLabel,
-                    answers.tradingStyle === style.value && styles.optionLabelSelected,
+                    answers.experienceLevel === level.value && styles.optionLabelSelected,
                   ]}
                 >
-                  {style.label}
+                  {level.label}
                 </Text>
-                <Text style={styles.optionDescription}>{style.description}</Text>
+                <Text style={styles.optionDescription}>{level.description}</Text>
               </View>
-              {answers.tradingStyle === style.value && (
+              {answers.experienceLevel === level.value && (
                 <View style={styles.checkmark}>
                   <Text style={styles.checkmarkText}>✓</Text>
                 </View>
@@ -78,7 +77,7 @@ export default function StyleScreen() {
           onPress={handleContinue}
           size="lg"
           fullWidth
-          disabled={!answers.tradingStyle}
+          disabled={!answers.experienceLevel}
         />
       </View>
     </SafeAreaView>
@@ -176,3 +175,4 @@ const styles = StyleSheet.create({
     paddingTop: spacing.md,
   },
 });
+

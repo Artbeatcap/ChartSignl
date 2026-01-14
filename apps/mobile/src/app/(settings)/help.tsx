@@ -59,7 +59,7 @@ const FAQ_ITEMS: FAQItem[] = [
     id: '7',
     question: 'How do I change my trading style profile?',
     answer:
-      'Tap on your Profile tab, then select "Edit Profile" to update your trading style, preferred instruments, and display name. This helps us tailor the analysis to your trading approach.',
+      'Tap on your Profile tab, then select "Edit Profile" to update your trading style, experience level, and display name. This helps us tailor the analysis to your trading approach.',
   },
 ];
 

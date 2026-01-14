@@ -1,92 +1,138 @@
 // User Profile Types
 
-export type TradingStyle = 'scalper' | 'day' | 'swing' | 'position' | 'long_term';
-export type InstrumentType = 'stocks' | 'options' | 'futures' | 'crypto' | 'forex';
+// Simplified trading styles (stocks-focused)
+export type TradingStyle = 'day' | 'swing' | 'position';
+
+// NEW: Experience level affects AI analysis verbosity
+export type ExperienceLevel = 'beginner' | 'intermediate' | 'advanced';
+
+// NEW: Stress reducer - product insight for development
+export type StressReducer = 
+  | 'clearer_levels'
+  | 'faster_analysis'
+  | 'confidence'
+  | 'less_screen_time';
 
 export interface UserProfile {
   id: string;
   email: string;
   displayName: string | null;
   createdAt: string;
-  style: TradingStyle | null;
-  instruments: InstrumentType[];
+  tradingStyle: TradingStyle | null;
+  experienceLevel: ExperienceLevel | null;
+  stressReducer: StressReducer | null;
   isPro: boolean;
   freeAnalysesUsed: number;
 }
 
 // Onboarding Types
 export interface OnboardingAnswers {
-  // Screen 1: Welcome - no data needed
-  
-  // Screen 2: Style
   tradingStyle: TradingStyle | null;
-  
-  // Screen 3: Instruments
-  instruments: InstrumentType[];
-  
-  // Screen 4: Pain Points
-  painPoints: PainPoint[];
-  
-  // Screen 5: Goals
-  goals: TradingGoal[];
-  
-  // Screen 6: Commitment
-  commitment: string;
+  experienceLevel: ExperienceLevel | null;
+  stressReducer: StressReducer | null;
   displayName: string;
 }
 
-export type PainPoint =
-  | 'missing_breakouts'
-  | 'buying_tops'
-  | 'selling_bottoms'
-  | 'unclear_exits'
-  | 'overtrading'
-  | 'fomo'
-  | 'revenge_trading'
-  | 'analysis_paralysis';
+// Labels for UI display
+export const TRADING_STYLE_OPTIONS: { 
+  value: TradingStyle; 
+  label: string; 
+  emoji: string; 
+  description: string;
+  defaultTimeframe: string;
+}[] = [
+  {
+    value: 'day',
+    label: 'Day Trades',
+    emoji: '☀️',
+    description: 'In and out same day',
+    defaultTimeframe: '5min',
+  },
+  {
+    value: 'swing',
+    label: 'Swing Trades',
+    emoji: '🌊',
+    description: 'Holding days to weeks',
+    defaultTimeframe: '1D',
+  },
+  {
+    value: 'position',
+    label: 'Position Trades',
+    emoji: '🏔️',
+    description: 'Weeks to months',
+    defaultTimeframe: '1W',
+  },
+];
 
-export type TradingGoal =
-  | 'fewer_fomo_trades'
-  | 'clearer_entries'
-  | 'better_exits'
-  | 'consistent_process'
-  | 'manage_risk'
-  | 'reduce_stress'
-  | 'trade_less_win_more';
+export const EXPERIENCE_LEVEL_OPTIONS: {
+  value: ExperienceLevel;
+  label: string;
+  emoji: string;
+  description: string;
+}[] = [
+  {
+    value: 'beginner',
+    label: 'New to it',
+    emoji: '🌱',
+    description: 'Still learning the basics',
+  },
+  {
+    value: 'intermediate',
+    label: 'Comfortable',
+    emoji: '📊',
+    description: 'Know support/resistance, use charts regularly',
+  },
+  {
+    value: 'advanced',
+    label: 'Advanced',
+    emoji: '🎯',
+    description: 'Deep into indicators and patterns',
+  },
+];
 
-export const PAIN_POINT_LABELS: Record<PainPoint, string> = {
-  missing_breakouts: 'Missing breakouts',
-  buying_tops: 'Buying at the top',
-  selling_bottoms: 'Selling at the bottom',
-  unclear_exits: 'Not knowing where to exit',
-  overtrading: 'Trading too often',
-  fomo: 'FOMO trades',
-  revenge_trading: 'Revenge trading',
-  analysis_paralysis: 'Analysis paralysis',
-};
+export const STRESS_REDUCER_OPTIONS: {
+  value: StressReducer;
+  label: string;
+  emoji: string;
+}[] = [
+  {
+    value: 'clearer_levels',
+    label: 'Clearer entry/exit levels',
+    emoji: '🎯',
+  },
+  {
+    value: 'faster_analysis',
+    label: 'Faster analysis when I\'m busy',
+    emoji: '⚡',
+  },
+  {
+    value: 'confidence',
+    label: 'Confidence I\'m not missing something',
+    emoji: '✅',
+  },
+  {
+    value: 'less_screen_time',
+    label: 'Spend less time staring at charts',
+    emoji: '🧘',
+  },
+];
 
-export const TRADING_GOAL_LABELS: Record<TradingGoal, string> = {
-  fewer_fomo_trades: 'Fewer FOMO trades',
-  clearer_entries: 'Clearer entry points',
-  better_exits: 'Better exit strategy',
-  consistent_process: 'A consistent process',
-  manage_risk: 'Better risk management',
-  reduce_stress: 'Less trading stress',
-  trade_less_win_more: 'Trade less, win more',
-};
+// Helper to get default chart timeframe based on trading style
+export function getDefaultTimeframe(style: TradingStyle | null): string {
+  const option = TRADING_STYLE_OPTIONS.find(o => o.value === style);
+  return option?.defaultTimeframe ?? '1D';
+}
 
-export const TRADING_STYLE_LABELS: Record<TradingStyle, string> = {
-  scalper: 'Scalper (minutes)',
-  day: 'Day Trader (hours)',
-  swing: 'Swing Trader (days)',
-  position: 'Position Trader (weeks)',
-  long_term: 'Long-term Investor (months+)',
-};
-
-export const INSTRUMENT_LABELS: Record<InstrumentType, string> = {
-  stocks: 'Stocks',
-  options: 'Options',
-  futures: 'Futures',
-  crypto: 'Crypto',
-  forex: 'Forex',
-};
+// Helper to determine AI verbosity based on experience
+export function getAIVerbosity(level: ExperienceLevel | null): 'detailed' | 'standard' | 'concise' {
+  switch (level) {
+    case 'beginner':
+      return 'detailed';
+    case 'intermediate':
+      return 'standard';
+    case 'advanced':
+      return 'concise';
+    default:
+      return 'standard';
+  }
+}

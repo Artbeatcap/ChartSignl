@@ -40,7 +40,7 @@ export default function PrivacyScreen() {
           • Account information (email address, display name)
         </Text>
         <Text style={styles.bulletItem}>
-          • Trading preferences (trading style, preferred instruments)
+          • Trading preferences (trading style, experience level)
         </Text>
         <Text style={styles.bulletItem}>
           • Chart data and analysis history

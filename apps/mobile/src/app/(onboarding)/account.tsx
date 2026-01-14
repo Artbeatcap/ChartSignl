@@ -68,10 +68,8 @@ export default function AccountScreen() {
             await updateProfile({
               display_name: answers.displayName,
               trading_style: answers.tradingStyle,
-              instruments: answers.instruments,
-              pain_points: answers.painPoints,
-              goals: answers.goals,
-              commitment: answers.commitment,
+              experience_level: answers.experienceLevel,
+              stress_reducer: answers.stressReducer,
               onboarding_completed: true,
             });
           } catch (profileError) {
@@ -154,7 +152,7 @@ export default function AccountScreen() {
         <TouchableOpacity onPress={() => router.back()}>
           <Text style={styles.backButton}>←</Text>
         </TouchableOpacity>
-        {mode === 'signup' && <ProgressIndicator current={6} total={6} />}
+        {mode === 'signup' && <ProgressIndicator current={4} total={4} />}
       </View>
 
       <ScrollView

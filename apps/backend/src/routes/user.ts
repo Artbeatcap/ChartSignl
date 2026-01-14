@@ -53,8 +53,9 @@ userRoute.get('/me', async (c) => {
         email: profile.email,
         displayName: profile.display_name,
         createdAt: profile.created_at,
-        style: profile.trading_style,
-        instruments: profile.instruments || [],
+        tradingStyle: profile.trading_style,
+        experienceLevel: profile.experience_level,
+        stressReducer: profile.stress_reducer,
         isPro: profile.is_pro || false,
         freeAnalysesUsed: usage?.free_analyses_used || 0,
       },
@@ -90,10 +91,8 @@ userRoute.put('/profile', async (c) => {
     const allowedFields = [
       'display_name',
       'trading_style',
-      'instruments',
-      'pain_points',
-      'goals',
-      'commitment',
+      'experience_level',
+      'stress_reducer',
       'onboarding_completed',
     ];
 

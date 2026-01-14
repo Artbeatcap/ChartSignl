@@ -15,14 +15,11 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getCurrentUser, updateProfile } from '../../lib/api';
 import { colors, typography, spacing, borderRadius } from '../../theme';
 import {
-  TRADING_STYLE_LABELS,
-  INSTRUMENT_LABELS,
+  TRADING_STYLE_OPTIONS,
+  EXPERIENCE_LEVEL_OPTIONS,
   type TradingStyle,
-  type InstrumentType,
+  type ExperienceLevel,
 } from '@chartsignl/core';
-
-const TRADING_STYLES: TradingStyle[] = ['scalper', 'day', 'swing', 'position', 'long_term'];
-const INSTRUMENTS: InstrumentType[] = ['stocks', 'options', 'futures', 'crypto', 'forex'];
 
 export default function EditProfileScreen() {
   const router = useRouter();
@@ -35,25 +32,17 @@ export default function EditProfileScreen() {
 
   const [displayName, setDisplayName] = useState('');
   const [tradingStyle, setTradingStyle] = useState<TradingStyle | null>(null);
-  const [selectedInstruments, setSelectedInstruments] = useState<InstrumentType[]>([]);
+  const [experienceLevel, setExperienceLevel] = useState<ExperienceLevel | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
   // Initialize form with current profile data
   useEffect(() => {
     if (profileData?.user) {
       setDisplayName(profileData.user.displayName || '');
-      setTradingStyle(profileData.user.style || null);
-      setSelectedInstruments(profileData.user.instruments || []);
+      setTradingStyle(profileData.user.tradingStyle || null);
+      setExperienceLevel(profileData.user.experienceLevel || null);
     }
   }, [profileData]);
-
-  const toggleInstrument = (instrument: InstrumentType) => {
-    setSelectedInstruments((prev) =>
-      prev.includes(instrument)
-        ? prev.filter((i) => i !== instrument)
-        : [...prev, instrument]
-    );
-  };
 
   const handleSave = async () => {
     if (!displayName.trim()) {
@@ -66,7 +55,7 @@ export default function EditProfileScreen() {
       await updateProfile({
         display_name: displayName.trim(),
         trading_style: tradingStyle,
-        instruments: selectedInstruments,
+        experience_level: experienceLevel,
       });
 
       // Invalidate profile query to refetch updated data
@@ -140,51 +129,51 @@ export default function EditProfileScreen() {
             How do you typically approach the markets?
           </Text>
           <View style={styles.optionsGrid}>
-            {TRADING_STYLES.map((style) => (
+            {TRADING_STYLE_OPTIONS.map((style) => (
               <TouchableOpacity
-                key={style}
+                key={style.value}
                 style={[
                   styles.optionChip,
-                  tradingStyle === style && styles.optionChipSelected,
+                  tradingStyle === style.value && styles.optionChipSelected,
                 ]}
-                onPress={() => setTradingStyle(style)}
+                onPress={() => setTradingStyle(style.value)}
               >
                 <Text
                   style={[
                     styles.optionText,
-                    tradingStyle === style && styles.optionTextSelected,
+                    tradingStyle === style.value && styles.optionTextSelected,
                   ]}
                 >
-                  {TRADING_STYLE_LABELS[style]}
+                  {style.label}
                 </Text>
               </TouchableOpacity>
             ))}
           </View>
         </View>
 
-        {/* Instruments */}
+        {/* Experience Level */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Instruments</Text>
+          <Text style={styles.sectionTitle}>Experience Level</Text>
           <Text style={styles.sectionSubtitle}>
-            What do you trade? Select all that apply.
+            How familiar are you with technical analysis?
           </Text>
           <View style={styles.optionsGrid}>
-            {INSTRUMENTS.map((instrument) => (
+            {EXPERIENCE_LEVEL_OPTIONS.map((level) => (
               <TouchableOpacity
-                key={instrument}
+                key={level.value}
                 style={[
                   styles.optionChip,
-                  selectedInstruments.includes(instrument) && styles.optionChipSelected,
+                  experienceLevel === level.value && styles.optionChipSelected,
                 ]}
-                onPress={() => toggleInstrument(instrument)}
+                onPress={() => setExperienceLevel(level.value)}
               >
                 <Text
                   style={[
                     styles.optionText,
-                    selectedInstruments.includes(instrument) && styles.optionTextSelected,
+                    experienceLevel === level.value && styles.optionTextSelected,
                   ]}
                 >
-                  {INSTRUMENT_LABELS[instrument]}
+                  {level.label}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -292,4 +281,3 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
-

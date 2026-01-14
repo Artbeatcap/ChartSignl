@@ -6,7 +6,7 @@ import { Card, Button, EmailVerificationBanner } from '../../components';
 import { useAuthStore } from '../../store/authStore';
 import { getCurrentUser, getUsage } from '../../lib/api';
 import { colors, typography, spacing, borderRadius, shadows } from '../../theme';
-import { FREE_ANALYSIS_LIMIT, TRADING_STYLE_LABELS } from '@chartsignl/core';
+import { FREE_ANALYSIS_LIMIT, TRADING_STYLE_OPTIONS } from '@chartsignl/core';
 import { useEffect } from 'react';
 
 export default function ProfileScreen() {
@@ -194,20 +194,20 @@ export default function ProfileScreen() {
         </Card>
 
         {/* Trading Profile */}
-        {profile?.style && (
+        {profile?.tradingStyle && (
           <Card style={styles.profileCard}>
-            <Text style={styles.cardTitle}>Your Trading Style</Text>
+            <Text style={styles.cardTitle}>Your Trading Profile</Text>
             <View style={styles.profileItem}>
-              <Text style={styles.profileLabel}>Style</Text>
+              <Text style={styles.profileLabel}>Trading Style</Text>
               <Text style={styles.profileValue}>
-                {TRADING_STYLE_LABELS[profile.style] || profile.style}
+                {TRADING_STYLE_OPTIONS.find(o => o.value === profile.tradingStyle)?.label || profile.tradingStyle}
               </Text>
             </View>
-            {profile.instruments && profile.instruments.length > 0 && (
+            {profile.experienceLevel && (
               <View style={styles.profileItem}>
-                <Text style={styles.profileLabel}>Instruments</Text>
+                <Text style={styles.profileLabel}>Experience Level</Text>
                 <Text style={styles.profileValue}>
-                  {profile.instruments.join(', ')}
+                  {profile.experienceLevel.charAt(0).toUpperCase() + profile.experienceLevel.slice(1)}
                 </Text>
               </View>
             )}

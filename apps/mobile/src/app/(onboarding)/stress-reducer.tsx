@@ -3,15 +3,14 @@ import { useRouter } from 'expo-router';
 import { Button, ProgressIndicator } from '../../components';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { colors, typography, spacing, borderRadius, shadows } from '../../theme';
-import type { TradingStyle } from '@chartsignl/core';
-import { TRADING_STYLE_OPTIONS } from '@chartsignl/core';
+import { STRESS_REDUCER_OPTIONS } from '@chartsignl/core';
 
-export default function StyleScreen() {
+export default function StressReducerScreen() {
   const router = useRouter();
-  const { answers, setTradingStyle } = useOnboardingStore();
+  const { answers, setStressReducer } = useOnboardingStore();
 
   const handleContinue = () => {
-    router.push('/(onboarding)/experience');
+    router.push('/(onboarding)/account');
   };
 
   return (
@@ -21,7 +20,7 @@ export default function StyleScreen() {
         <TouchableOpacity onPress={() => router.back()}>
           <Text style={styles.backButton}>←</Text>
         </TouchableOpacity>
-        <ProgressIndicator current={1} total={4} />
+        <ProgressIndicator current={3} total={4} />
       </View>
 
       <ScrollView
@@ -31,37 +30,34 @@ export default function StyleScreen() {
       >
         {/* Title */}
         <View style={styles.titleSection}>
-          <Text style={styles.title}>How do you typically trade?</Text>
+          <Text style={styles.title}>What would help you trade with less stress?</Text>
           <Text style={styles.subtitle}>
-            We'll prioritize levels that match your timeframe.
+            Pick what matters most to you.
           </Text>
         </View>
 
         {/* Options */}
         <View style={styles.optionsContainer}>
-          {TRADING_STYLE_OPTIONS.map((style) => (
+          {STRESS_REDUCER_OPTIONS.map((option) => (
             <TouchableOpacity
-              key={style.value}
+              key={option.value}
               style={[
                 styles.optionCard,
-                answers.tradingStyle === style.value && styles.optionCardSelected,
+                answers.stressReducer === option.value && styles.optionCardSelected,
               ]}
-              onPress={() => setTradingStyle(style.value)}
+              onPress={() => setStressReducer(option.value)}
               activeOpacity={0.7}
             >
-              <Text style={styles.optionEmoji}>{style.emoji}</Text>
-              <View style={styles.optionContent}>
-                <Text
-                  style={[
-                    styles.optionLabel,
-                    answers.tradingStyle === style.value && styles.optionLabelSelected,
-                  ]}
-                >
-                  {style.label}
-                </Text>
-                <Text style={styles.optionDescription}>{style.description}</Text>
-              </View>
-              {answers.tradingStyle === style.value && (
+              <Text style={styles.optionEmoji}>{option.emoji}</Text>
+              <Text
+                style={[
+                  styles.optionLabel,
+                  answers.stressReducer === option.value && styles.optionLabelSelected,
+                ]}
+              >
+                {option.label}
+              </Text>
+              {answers.stressReducer === option.value && (
                 <View style={styles.checkmark}>
                   <Text style={styles.checkmarkText}>✓</Text>
                 </View>
@@ -74,12 +70,15 @@ export default function StyleScreen() {
       {/* Bottom CTA */}
       <View style={styles.bottomSection}>
         <Button
-          title="Continue"
+          title="Almost done"
           onPress={handleContinue}
           size="lg"
           fullWidth
-          disabled={!answers.tradingStyle}
+          disabled={!answers.stressReducer}
         />
+        <TouchableOpacity onPress={handleContinue}>
+          <Text style={styles.skipText}>Skip for now</Text>
+        </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
@@ -139,23 +138,16 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary[50],
   },
   optionEmoji: {
-    fontSize: 32,
+    fontSize: 28,
     marginRight: spacing.md,
-  },
-  optionContent: {
-    flex: 1,
   },
   optionLabel: {
     ...typography.labelLg,
     color: colors.neutral[900],
-    marginBottom: 2,
+    flex: 1,
   },
   optionLabelSelected: {
     color: colors.primary[700],
-  },
-  optionDescription: {
-    ...typography.bodySm,
-    color: colors.neutral[500],
   },
   checkmark: {
     width: 24,
@@ -174,5 +166,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.xl,
     paddingTop: spacing.md,
+    gap: spacing.md,
+    alignItems: 'center',
+  },
+  skipText: {
+    ...typography.bodyMd,
+    color: colors.neutral[500],
   },
 });
+

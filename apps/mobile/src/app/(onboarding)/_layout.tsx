@@ -13,10 +13,8 @@ export default function OnboardingLayout() {
     >
       <Stack.Screen name="welcome" />
       <Stack.Screen name="style" />
-      <Stack.Screen name="instruments" />
-      <Stack.Screen name="pain-points" />
-      <Stack.Screen name="goals" />
-      <Stack.Screen name="commitment" />
+      <Stack.Screen name="experience" />
+      <Stack.Screen name="stress-reducer" />
       <Stack.Screen name="account" />
     </Stack>
   );
