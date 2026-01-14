@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, TextInput } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, TextInput, Alert, Platform } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Button, ProgressIndicator, Input } from '../../components';
 import { useOnboardingStore } from '../../store/onboardingStore';
@@ -41,7 +41,18 @@ export default function AccountScreen() {
           password,
         });
 
-        if (signUpError) throw signUpError;
+        // Handle signup errors - if user was created but email failed, allow continuation
+        if (signUpError) {
+          // If user was created but email sending failed, allow user to continue
+          // They can verify email later via the resend button
+          if (data?.user && (signUpError.message?.includes('confirmation email') || signUpError.message?.includes('Error sending'))) {
+            // Continue with user creation flow - user can resend email later
+            // Don't throw error, proceed to user creation flow below
+          } else {
+            // Other errors should still be thrown
+            throw signUpError;
+          }
+        }
 
         if (data.user) {
           // Check if email confirmation is required (no session means confirmation needed)
@@ -87,7 +98,30 @@ export default function AccountScreen() {
         router.replace('/(tabs)/home');
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Authentication failed');
+      let errorMessage = err instanceof Error ? err.message : 'Authentication failed';
+      
+      // Provide more helpful error message for email configuration issues
+      if (errorMessage.includes('confirmation email') || errorMessage.includes('Error sending')) {
+        const detailedMessage = 'Email verification is misconfigured in Supabase.\n\nTo fix:\n1. Go to Supabase Dashboard > Authentication > Settings\n2. Either disable "Enable email confirmations", OR\n3. Configure SMTP under Authentication > Email Templates\n\nFor development, disabling email confirmations is recommended.';
+        
+        // Show detailed error in Alert for better visibility (works on mobile)
+        // On web, Alert.alert may not work reliably, so we'll also set the error text
+        if (Platform.OS !== 'web') {
+          Alert.alert(
+            'Email Configuration Error',
+            detailedMessage,
+            [{ text: 'OK' }]
+          );
+          setError('Email configuration error - see Alert above');
+        } else {
+          // On web, show the full message in the error text
+          setError(detailedMessage);
+        }
+        
+        return; // Don't set the error text again since we already set it
+      }
+      
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }

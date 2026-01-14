@@ -61,6 +61,15 @@ export function EmailVerificationBanner({
       setTimeout(() => setShowSuccess(false), 3000);
     } catch (error) {
       console.error('Failed to resend verification email:', error);
+      
+      // Show user-friendly error message
+      const errorMessage = error instanceof Error 
+        ? error.message 
+        : 'Failed to send verification email. Please check your Supabase email configuration.';
+      
+      // For now, we'll just log - in a production app, you might want to show an Alert
+      // or update the UI to show the error state
+      console.error('Email verification error:', errorMessage);
     } finally {
       setIsResending(false);
     }
