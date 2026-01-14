@@ -23,7 +23,7 @@ import type { ChartViewType, ChartInterval, AILevel, EnhancedAIAnalysis, ScoredL
 export default function HomeScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { user, isEmailVerified, showEmailVerificationModal, setShowEmailVerificationModal } = useAuthStore();
+  const { user, isEmailVerified, showEmailVerificationModal, setShowEmailVerificationModal, pendingEmailVerification, setPendingEmailVerification } = useAuthStore();
 
   // Chart state
   const [selectedSymbol, setSelectedSymbol] = useState('AAPL');
@@ -75,6 +75,14 @@ export default function HomeScreen() {
       setLocalLevels(levels);
     }
   }, [chartData]);
+
+  // Check for pending email verification on mount and trigger modal
+  useEffect(() => {
+    if (pendingEmailVerification && !isEmailVerified) {
+      setShowEmailVerificationModal(true);
+      setPendingEmailVerification(false);
+    }
+  }, [pendingEmailVerification, isEmailVerified, setShowEmailVerificationModal, setPendingEmailVerification]);
 
   // Price change calculation
   const priceChange = useMemo(() => {

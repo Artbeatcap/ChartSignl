@@ -12,6 +12,7 @@ interface AuthState {
   isPremium: boolean;
   isEmailVerified: boolean;
   showEmailVerificationModal: boolean;
+  pendingEmailVerification: boolean;
   
   // Actions
   setSession: (session: Session | null) => void;
@@ -21,6 +22,7 @@ interface AuthState {
   refreshSubscription: () => Promise<void>;
   checkEmailVerification: () => Promise<boolean>;
   setShowEmailVerificationModal: (show: boolean) => void;
+  setPendingEmailVerification: (pending: boolean) => void;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -31,6 +33,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   isPremium: false,
   isEmailVerified: true, // Default to true until we check
   showEmailVerificationModal: false,
+  pendingEmailVerification: false,
 
   setSession: (session) => {
     const isEmailVerified = !!session?.user?.email_confirmed_at;
@@ -39,6 +42,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       user: session?.user ?? null,
       isLoading: false,
       isEmailVerified,
+      pendingEmailVerification: session?.user && !isEmailVerified,
     });
   },
 
@@ -88,6 +92,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         set({ 
           isEmailVerified: true,
           showEmailVerificationModal: false,
+          pendingEmailVerification: false,
         });
       }
     });
@@ -110,6 +115,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   setShowEmailVerificationModal: (show) => {
     set({ showEmailVerificationModal: show });
+  },
+
+  setPendingEmailVerification: (pending) => {
+    set({ pendingEmailVerification: pending });
   },
 
   checkSubscriptionStatus: async () => {
@@ -236,6 +245,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         isPremium: false,
         isEmailVerified: true,
         showEmailVerificationModal: false,
+        pendingEmailVerification: false,
       });
       
       return true;

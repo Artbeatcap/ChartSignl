@@ -14,7 +14,7 @@ export default function AccountScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ mode?: AuthMode }>();
   const { answers } = useOnboardingStore();
-  const { setShowEmailVerificationModal } = useAuthStore();
+  const { setPendingEmailVerification } = useAuthStore();
   
   // Use mode from route params, default to 'signup' if not provided
   const [mode, setMode] = useState<AuthMode>(params.mode || 'signup');
@@ -77,9 +77,9 @@ export default function AccountScreen() {
             // Continue anyway - profile can be updated later
           }
 
-          // Show email verification modal if needed, then navigate to home
+          // Set pending email verification flag if needed, then navigate to home
           if (needsEmailVerification) {
-            setShowEmailVerificationModal(true);
+            setPendingEmailVerification(true);
           }
           
           // Navigate to home - user can use app with or without verification
