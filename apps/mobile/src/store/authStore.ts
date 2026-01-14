@@ -10,6 +10,8 @@ interface AuthState {
   isLoading: boolean;
   isInitialized: boolean;
   isPremium: boolean;
+  isEmailVerified: boolean;
+  showEmailVerificationModal: boolean;
   
   // Actions
   setSession: (session: Session | null) => void;
@@ -17,6 +19,8 @@ interface AuthState {
   signOut: () => Promise<void>;
   checkSubscriptionStatus: () => Promise<boolean>;
   refreshSubscription: () => Promise<void>;
+  checkEmailVerification: () => Promise<boolean>;
+  setShowEmailVerificationModal: (show: boolean) => void;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -25,12 +29,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   isLoading: true,
   isInitialized: false,
   isPremium: false,
+  isEmailVerified: true, // Default to true until we check
+  showEmailVerificationModal: false,
 
   setSession: (session) => {
+    const isEmailVerified = !!session?.user?.email_confirmed_at;
     set({
       session,
       user: session?.user ?? null,
       isLoading: false,
+      isEmailVerified,
     });
   },
 
@@ -42,11 +50,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     // Get initial session
     const { data: { session } } = await supabase.auth.getSession();
     
+    // Check email verification status
+    const isEmailVerified = !!session?.user?.email_confirmed_at;
+    
     set({
       session,
       user: session?.user ?? null,
       isLoading: false,
       isInitialized: true,
+      isEmailVerified,
     });
 
     // Check subscription status if user is logged in
@@ -55,10 +67,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
 
     // Listen for auth changes
-    supabase.auth.onAuthStateChange(async (_event, session) => {
+    supabase.auth.onAuthStateChange(async (event, session) => {
+      const isEmailVerified = !!session?.user?.email_confirmed_at;
+      
       set({
         session,
         user: session?.user ?? null,
+        isEmailVerified,
       });
       
       // Check subscription when user logs in
@@ -67,7 +82,34 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       } else {
         set({ isPremium: false });
       }
+
+      // If user just verified their email, update state
+      if (event === 'USER_UPDATED' && session?.user?.email_confirmed_at) {
+        set({ 
+          isEmailVerified: true,
+          showEmailVerificationModal: false,
+        });
+      }
     });
+  },
+
+  checkEmailVerification: async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (user) {
+      const isVerified = !!user.email_confirmed_at;
+      set({ 
+        user,
+        isEmailVerified: isVerified,
+      });
+      return isVerified;
+    }
+    
+    return false;
+  },
+
+  setShowEmailVerificationModal: (show) => {
+    set({ showEmailVerificationModal: show });
   },
 
   checkSubscriptionStatus: async () => {
@@ -184,6 +226,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       session: null,
       user: null,
       isPremium: false,
+      isEmailVerified: true,
+      showEmailVerificationModal: false,
     });
   },
 }));

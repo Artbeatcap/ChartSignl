@@ -1,8 +1,9 @@
 import { useState, useRef } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Alert, TextInput } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, TextInput } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Button, ProgressIndicator, Input } from '../../components';
 import { useOnboardingStore } from '../../store/onboardingStore';
+import { useAuthStore } from '../../store/authStore';
 import { supabase } from '../../lib/supabase';
 import { updateProfile } from '../../lib/api';
 import { colors, typography, spacing, borderRadius, shadows } from '../../theme';
@@ -13,6 +14,7 @@ export default function AccountScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ mode?: AuthMode }>();
   const { answers } = useOnboardingStore();
+  const { setShowEmailVerificationModal } = useAuthStore();
   
   // Use mode from route params, default to 'signup' if not provided
   const [mode, setMode] = useState<AuthMode>(params.mode || 'signup');
@@ -42,20 +44,15 @@ export default function AccountScreen() {
         if (signUpError) throw signUpError;
 
         if (data.user) {
-          // Check if email confirmation is required
-          if (!data.session) {
-            Alert.alert(
-              'Verify your email',
-              'Please check your email and click the confirmation link to complete signup.',
-              [{ text: 'OK' }]
-            );
-            return;
-          }
-
-          // Wait a moment for session to be persisted to storage
-          await new Promise(resolve => setTimeout(resolve, 500));
+          // Check if email confirmation is required (no session means confirmation needed)
+          const needsEmailVerification = !data.session;
           
-          // Save onboarding data to profile
+          // If we have a session, wait for it to be persisted
+          if (data.session) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+          
+          // Save onboarding data to profile (try even without session)
           try {
             await updateProfile({
               display_name: answers.displayName,
@@ -68,14 +65,15 @@ export default function AccountScreen() {
             });
           } catch (profileError) {
             console.error('Failed to update profile:', profileError);
-            // Continue anyway - user is signed up
-            Alert.alert(
-              'Profile Update',
-              'Account created but profile update failed. You can update it later.',
-              [{ text: 'OK' }]
-            );
+            // Continue anyway - profile can be updated later
           }
 
+          // Show email verification modal if needed, then navigate to home
+          if (needsEmailVerification) {
+            setShowEmailVerificationModal(true);
+          }
+          
+          // Navigate to home - user can use app with or without verification
           router.replace('/(tabs)/home');
         }
       } else {

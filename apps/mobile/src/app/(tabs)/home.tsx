@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Card, SymbolSearch, StockChart } from '../../components';
+import { Button, Card, SymbolSearch, StockChart, EmailVerificationBanner } from '../../components';
 import { useAuthStore } from '../../store/authStore';
 import { fetchMarketData, addIndicators, formatPrice, calculatePriceChange } from '../../lib/marketData';
 import { findLocalLevels, detectTrend, analyzeChartData } from '../../lib/chartAnalysis';
@@ -23,7 +23,7 @@ import type { ChartViewType, ChartInterval, AILevel, EnhancedAIAnalysis, ScoredL
 export default function HomeScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { user } = useAuthStore();
+  const { user, isEmailVerified, showEmailVerificationModal, setShowEmailVerificationModal } = useAuthStore();
 
   // Chart state
   const [selectedSymbol, setSelectedSymbol] = useState('AAPL');
@@ -150,11 +150,22 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Email Verification Modal - shows once after signup */}
+      {showEmailVerificationModal && (
+        <EmailVerificationBanner 
+          variant="modal" 
+          onDismiss={() => setShowEmailVerificationModal(false)}
+        />
+      )}
+      
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
+        {/* Email Verification Banner - persistent reminder */}
+        {!isEmailVerified && <EmailVerificationBanner variant="banner" />}
+        
         {/* Header */}
         <View style={styles.header}>
           <View>

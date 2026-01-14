@@ -2,7 +2,7 @@ import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Ale
 import { useRouter } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
-import { Card, Button } from '../../components';
+import { Card, Button, EmailVerificationBanner } from '../../components';
 import { useAuthStore } from '../../store/authStore';
 import { getCurrentUser, getUsage } from '../../lib/api';
 import { colors, typography, spacing, borderRadius, shadows } from '../../theme';
@@ -12,7 +12,7 @@ import { useEffect } from 'react';
 export default function ProfileScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { user, signOut, isPremium, checkSubscriptionStatus } = useAuthStore();
+  const { user, signOut, isPremium, checkSubscriptionStatus, isEmailVerified } = useAuthStore();
 
   const { data: profileData } = useQuery({
     queryKey: ['profile'],
@@ -99,6 +99,9 @@ export default function ProfileScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
+        {/* Email Verification Banner */}
+        {!isEmailVerified && <EmailVerificationBanner variant="banner" />}
+        
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.avatar}>
