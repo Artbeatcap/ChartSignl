@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '../store/authStore';
 import { colors, typography } from '../theme';
@@ -28,6 +28,13 @@ export default function IndexScreen() {
       
       {/* Logo/Brand */}
       <View style={styles.content}>
+        <View style={styles.logoContainer}>
+          <Image
+            source={require('../../assets/logo.png')}
+            style={styles.logoImage}
+            resizeMode="contain"
+          />
+        </View>
         <Text style={styles.logo}>ChartSignl</Text>
         <Text style={styles.tagline}>See the levels clearly</Text>
       </View>
@@ -58,6 +65,15 @@ const styles = StyleSheet.create({
   },
   content: {
     alignItems: 'center',
+  },
+  logoContainer: {
+    marginBottom: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  logoImage: {
+    width: 100,
+    height: 100,
   },
   logo: {
     ...typography.displayLg,
