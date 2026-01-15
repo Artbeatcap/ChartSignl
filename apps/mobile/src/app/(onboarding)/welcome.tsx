@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, SafeAreaView } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Button } from '../../components';
 import { colors, typography, spacing } from '../../theme';
@@ -15,7 +15,11 @@ export default function WelcomeScreen() {
         {/* Hero section */}
         <View style={styles.heroSection}>
           <Text style={styles.brandName}>ChartSignl</Text>
-          <Text style={styles.emoji}>📊</Text>
+          <Image 
+            source={require('../../../assets/icon.png')} 
+            style={styles.logo}
+            resizeMode="contain"
+          />
           <Text style={styles.title}>Levels shouldn't{'\n'}feel like guesswork</Text>
           <Text style={styles.subtitle}>
             Search any stock. Get the key levels instantly. 
@@ -101,8 +105,9 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     letterSpacing: -0.5,
   },
-  emoji: {
-    fontSize: 64,
+  logo: {
+    width: 120,
+    height: 120,
     marginBottom: spacing.md,
   },
   title: {
