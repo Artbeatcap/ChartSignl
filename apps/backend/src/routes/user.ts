@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { supabaseAdmin, getUserFromToken } from '../lib/supabase';
+import { supabaseAdmin, getUserFromToken } from '../lib/supabase.js';
 import type { UsageResponse, AuthResponse } from '@chartsignl/core';
 import { FREE_ANALYSIS_LIMIT } from '@chartsignl/core';
 

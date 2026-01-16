@@ -5,10 +5,10 @@ import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
 
 // Routes
-import analyzeDataRoute from './routes/analyzeData';
-import historyRoute from './routes/history';
-import userRoute from './routes/user';
-import marketDataRoute from './routes/marketData';
+import analyzeDataRoute from './routes/analyzeData.js';
+import historyRoute from './routes/history.js';
+import userRoute from './routes/user.js';
+import marketDataRoute from './routes/marketData.js';
 
 const app = new Hono();
 

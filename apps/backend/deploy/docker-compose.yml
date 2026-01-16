@@ -3,7 +3,7 @@ version: '3.8'
 services:
   chartsignl-api:
     build:
-      context: ../..
+      context: ../../..
       dockerfile: apps/backend/Dockerfile
     container_name: chartsignl-api
     restart: unless-stopped

@@ -1,6 +1,6 @@
 import OpenAI from 'openai';
 import type { ChartAnalysis } from '@chartsignl/core';
-import { CHART_ANALYSIS_SYSTEM_PROMPT, CHART_ANALYSIS_USER_PROMPT } from '../prompts/chartAnalysis';
+import { CHART_ANALYSIS_SYSTEM_PROMPT, CHART_ANALYSIS_USER_PROMPT } from '../prompts/chartAnalysis.js';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,

@@ -5,7 +5,7 @@ import {
   ANALYSIS_CONFIG,
   type VolatilityRegime,
   type StrengthLevel,
-} from './analysisConstants';
+} from './analysisConstants.js';
 
 import type {
   TechnicalIndicators,
@@ -16,7 +16,7 @@ import type {
   ATRData,
   TrendState,
   BollingerData,
-} from './technicalCalculator';
+} from './technicalCalculator.js';
 
 // ============================================================================
 // TYPE DEFINITIONS
@@ -215,13 +215,13 @@ function generateCandidateLevels(
 
 function scoreLevel(
   price: number,
-  type: 'support' | 'resistance',
-  currentPrice: number,
+  _type: 'support' | 'resistance',
+  _currentPrice: number,
   swingPoints: SwingPoint[],
   fibonacci: FibonacciData | null,
   ema: EMAData,
   volumeProfile: VolumeProfile,
-  atr: ATRData
+  _atr: ATRData
 ): { score: number; factors: ConfluenceFactors } {
   const weights = ANALYSIS_CONFIG.CONFLUENCE_WEIGHTS;
   const tolerance = ANALYSIS_CONFIG.TOLERANCE_BAND_PERCENT;
@@ -364,7 +364,6 @@ function consolidateLevels(
 ): ScoredLevel[] {
   const tolerance = ANALYSIS_CONFIG.TOLERANCE_BAND_PERCENT;
   const scoredLevels: ScoredLevel[] = [];
-  const processedPrices = new Set<number>();
 
   // Group candidates by price (within tolerance)
   const priceGroups: Map<number, CandidateLevel[]> = new Map();
@@ -387,7 +386,7 @@ function consolidateLevels(
   let supportIndex = 0;
   let resistanceIndex = 0;
 
-  for (const [groupPrice, group] of priceGroups) {
+  for (const [_groupPrice, group] of priceGroups) {
     // Use the average price of the group
     const avgPrice = group.reduce((sum, c) => sum + c.price, 0) / group.length;
 
@@ -500,7 +499,7 @@ function calculateOverallConfidence(
   dataPoints: number
 ): ConfidenceScoring {
   const config = ANALYSIS_CONFIG.CONFIDENCE;
-  let score = config.baseScore;
+  let score: number = config.baseScore;
   const factors: ConfidenceScoring['factors'] = [];
 
   // Positive factors
