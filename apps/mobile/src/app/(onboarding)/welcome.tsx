@@ -15,11 +15,13 @@ export default function WelcomeScreen() {
         {/* Hero section */}
         <View style={styles.heroSection}>
           <Text style={styles.brandName}>ChartSignl</Text>
-          <Image 
-            source={require('../../../assets/icon.png')} 
-            style={styles.logo}
-            resizeMode="contain"
-          />
+          <View style={styles.logoContainer}>
+            <Image
+              source={require('../../../assets/logo.png')}
+              style={styles.logo}
+              resizeMode="contain"
+            />
+          </View>
           <Text style={styles.title}>Levels shouldn't{'\n'}feel like guesswork</Text>
           <Text style={styles.subtitle}>
             Search any stock. Get the key levels instantly. 
@@ -105,10 +107,14 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     letterSpacing: -0.5,
   },
+  logoContainer: {
+    marginBottom: spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   logo: {
     width: 120,
     height: 120,
-    marginBottom: spacing.md,
   },
   title: {
     ...typography.displayMd,

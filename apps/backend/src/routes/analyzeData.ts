@@ -3,7 +3,7 @@
 
 import { Hono } from 'hono';
 import OpenAI from 'openai';
-import { supabaseAdmin, getUserFromToken } from '../lib/supabase';
+import { supabaseAdmin, getUserFromToken } from '../lib/supabase.js';
 import { FREE_ANALYSIS_LIMIT } from '@chartsignl/core';
 
 // Import our technical analysis modules
@@ -11,19 +11,17 @@ import {
   calculateAllIndicators,
   type MarketDataPoint,
   type TechnicalIndicators,
-} from '../lib/technicalCalculator';
+} from '../lib/technicalCalculator.js';
 
 import {
   scoreLevels,
   getExpandedLevels,
   type ScoredAnalysis,
-  type ScoredLevel,
-} from '../lib/confluenceScorer';
+} from '../lib/confluenceScorer.js';
 
 import type {
   EnhancedAIAnalysis,
   TechnicalDetails,
-  TechnicalDetailItem,
   TradeIdea,
 } from '@chartsignl/core';
 
@@ -110,31 +108,31 @@ VOLATILITY & MOMENTUM:
 - ATR: $${atr.atr.toFixed(2)} (${atr.atrPercent.toFixed(2)}% of price)
 - Bollinger Bands: Lower $${bollinger.lowerBand.toFixed(2)} | Middle $${bollinger.middleBand.toFixed(2)} | Upper $${bollinger.upperBand.toFixed(2)}
 - Band Position: ${(bollinger.percentB * 100).toFixed(1)}% (0% = lower band, 100% = upper band)
-- Overextension: ${overextension.status} - ${overextension.description}
+- Overextension: ${overextension.status} (${overextension.direction} EMA21, signal: ${overextension.signalType})
 
 ${fibonacci ? `FIBONACCI LEVELS (${fibonacci.swingDirection === 'up' ? 'retracement' : 'extension'} from ${fibonacci.swingHighDate} to ${fibonacci.swingLowDate}):
 - 0%: $${(fibonacci.swingDirection === 'up' ? fibonacci.swingLow : fibonacci.swingHigh).toFixed(2)}
-${fibonacci.levels.map((fib) => `- ${fib.label}: $${fib.price.toFixed(2)}`).join('\n')}
+${fibonacci.levels.map((fib: any) => `- ${fib.label}: $${fib.price.toFixed(2)}`).join('\n')}
 - 100%: $${(fibonacci.swingDirection === 'up' ? fibonacci.swingHigh : fibonacci.swingLow).toFixed(2)}
 ` : ''}
 
 TOP SUPPORT LEVELS (${supportLevels.length} total, showing top 3):
-${topSupport.map((l, i) => `${i + 1}. $${l.price.toFixed(2)} - ${l.strength} (${l.confluenceScore}% confluence, ${l.distancePercent.toFixed(2)}% away)
+${topSupport.map((l: any, i: number) => `${i + 1}. $${l.price.toFixed(2)} - ${l.strength} (${l.confluenceScore}% confluence, ${l.distancePercent.toFixed(2)}% away)
    Factors: ${Object.entries(l.factors)
-     .filter(([_, v]) => v)
-     .map(([k]) => k)
+     .filter(([_k, v]: [string, any]) => v)
+     .map((entry: [string, any]) => entry[0])
      .join(', ')}`).join('\n')}
 
 TOP RESISTANCE LEVELS (${resistanceLevels.length} total, showing top 3):
-${topResistance.map((l, i) => `${i + 1}. $${l.price.toFixed(2)} - ${l.strength} (${l.confluenceScore}% confluence, ${l.distancePercent.toFixed(2)}% away)
+${topResistance.map((l: any, i: number) => `${i + 1}. $${l.price.toFixed(2)} - ${l.strength} (${l.confluenceScore}% confluence, ${l.distancePercent.toFixed(2)}% away)
    Factors: ${Object.entries(l.factors)
-     .filter(([_, v]) => v)
-     .map(([k]) => k)
+     .filter(([_k, v]: [string, any]) => v)
+     .map((entry: [string, any]) => entry[0])
      .join(', ')}`).join('\n')}
 
 ANALYSIS CONFIDENCE: ${confidence.overall}% (${confidence.label})
 Factors affecting confidence:
-${confidence.factors.map(f => `- ${f.name}: ${f.impact > 0 ? '+' : ''}${f.impact}% - ${f.reason}`).join('\n')}
+${confidence.factors.map((f: any) => `- ${f.name}: ${f.impact > 0 ? '+' : ''}${f.impact}% - ${f.reason}`).join('\n')}
 
 Based on this data, provide your analysis focusing on the most actionable insights for a trader.`;
 }

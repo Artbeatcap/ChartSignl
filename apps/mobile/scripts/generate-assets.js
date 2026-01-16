@@ -14,6 +14,7 @@ if (!fs.existsSync(publicDir)) {
 const sizes = [
   { size: 1024, output: path.join(assetsDir, 'icon.png') },
   { size: 1024, output: path.join(assetsDir, 'adaptive-icon.png') },
+  { size: 512, output: path.join(assetsDir, 'logo.png') }, // In-app logo for welcome/onboarding screens
   { size: 512, output: path.join(publicDir, 'android-chrome-512x512.png') },
   { size: 192, output: path.join(publicDir, 'android-chrome-192x192.png') },
   { size: 180, output: path.join(publicDir, 'apple-touch-icon.png') },

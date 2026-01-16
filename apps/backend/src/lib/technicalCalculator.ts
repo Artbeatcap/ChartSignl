@@ -6,7 +6,7 @@ import {
   getSwingBars,
   isFibonacciTimeframe,
   type VolatilityRegime,
-} from './analysisConstants';
+} from './analysisConstants.js';
 
 // ============================================================================
 // TYPE DEFINITIONS
@@ -574,7 +574,7 @@ export function calculateFibonacci(
 
   // Calculate Fibonacci levels
   const range = swingHighPrice - swingLowPrice;
-  const levels = ANALYSIS_CONFIG.FIB_LEVELS.map((fib) => {
+  const levels = ANALYSIS_CONFIG.FIB_LEVELS.map((fib: { level: number; label: string; weight: number }) => {
     let price: number;
     if (swingDirection === 'up') {
       // Retracing an up move: levels are measured down from the high

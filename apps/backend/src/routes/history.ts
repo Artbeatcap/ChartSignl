@@ -1,7 +1,7 @@
 // History Route - Simplified (No Images)
 
 import { Hono } from 'hono';
-import { supabaseAdmin, getUserFromToken } from '../lib/supabase';
+import { supabaseAdmin, getUserFromToken } from '../lib/supabase.js';
 import type { GetHistoryResponse, GetAnalysisResponse, AnalysisHistoryItem } from '@chartsignl/core';
 
 const historyRoute = new Hono();

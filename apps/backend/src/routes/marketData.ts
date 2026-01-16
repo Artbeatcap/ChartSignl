@@ -62,7 +62,7 @@ marketDataRoute.get('/:symbol', async (c) => {
       return c.json({ error: 'Failed to fetch market data' }, 500);
     }
 
-    const json = await response.json();
+    const json = await response.json() as any;
 
     if (json.status === 'ERROR' || json.status === 'NOT_FOUND') {
       return c.json({ error: json.error || 'Symbol not found' }, 404);
@@ -117,7 +117,7 @@ marketDataRoute.get('/:symbol/quote', async (c) => {
       return c.json({ error: 'Failed to fetch quote' }, 500);
     }
 
-    const json = await response.json();
+    const json = await response.json() as any;
 
     if (!json.results || json.results.length === 0) {
       return c.json({ error: 'No quote data available' }, 404);
@@ -162,7 +162,7 @@ marketDataRoute.get('/search/:query', async (c) => {
       return c.json({ error: 'Search failed' }, 500);
     }
 
-    const json = await response.json();
+    const json = await response.json() as any;
 
     // Filter results to prioritize major US exchanges (NASDAQ, NYSE, ARCA)
     // and exclude OTC, pink sheets, and other minor exchanges

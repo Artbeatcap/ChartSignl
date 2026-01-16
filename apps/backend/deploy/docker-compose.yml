@@ -3,7 +3,7 @@ version: '3.8'
 services:
   chartsignl-api:
     build:
-      context: ../..
+      context: ../../..
       dockerfile: apps/backend/Dockerfile
     container_name: chartsignl-api
     restart: unless-stopped
@@ -15,7 +15,7 @@ services:
       - SUPABASE_URL=${SUPABASE_URL}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - CORS_ORIGINS=${CORS_ORIGINS:-https://charts.yourdomain.com}
+      - CORS_ORIGINS=${CORS_ORIGINS:-https://app.chartsignl.com}
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:4000/health"]
       interval: 30s
