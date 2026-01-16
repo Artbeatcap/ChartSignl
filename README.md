@@ -82,8 +82,12 @@ npm install
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 OPENAI_API_KEY=sk-your-openai-key
+POLYGON_API_KEY=your-polygon-api-key
 PORT=4000
+CORS_ORIGINS=https://app.chartsignl.com,http://localhost:8081,http://localhost:19006,http://localhost:3000
 ```
+
+**Note**: `CORS_ORIGINS` should be a comma-separated list of allowed origins. In production, ensure it includes your frontend domain (e.g., `https://app.chartsignl.com`).
 
 **Mobile** (`apps/mobile/.env`):
 ```env
