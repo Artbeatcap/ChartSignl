@@ -50,3 +50,4 @@ CREATE TRIGGER subscriptions_updated_at
   BEFORE UPDATE ON public.subscriptions
   FOR EACH ROW EXECUTE PROCEDURE public.update_subscription_updated_at();
 
+

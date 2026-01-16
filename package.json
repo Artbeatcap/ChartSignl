@@ -14,7 +14,9 @@
     "build:web": "turbo run build:web --filter=mobile",
     "lint": "turbo run lint",
     "type-check": "turbo run type-check",
-    "clean": "turbo run clean && rm -rf node_modules"
+    "clean": "turbo run clean && rm -rf node_modules",
+    "android": "expo run:android",
+    "ios": "expo run:ios"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",
@@ -25,5 +27,10 @@
   "engines": {
     "node": ">=20.0.0"
   },
-  "packageManager": "npm@10.2.0"
+  "packageManager": "npm@10.2.0",
+  "dependencies": {
+    "expo": "~50.0.17",
+    "react": "18.2.0",
+    "react-native": "0.73.6"
+  }
 }

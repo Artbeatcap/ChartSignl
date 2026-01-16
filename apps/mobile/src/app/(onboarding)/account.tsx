@@ -1,12 +1,17 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, TextInput, Alert, Platform } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
+import * as AuthSession from 'expo-auth-session';
 import { Button, ProgressIndicator, Input } from '../../components';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { useAuthStore } from '../../store/authStore';
 import { supabase } from '../../lib/supabase';
 import { updateProfile } from '../../lib/api';
 import { colors, typography, spacing, borderRadius, shadows } from '../../theme';
+
+// Complete auth session in browser
+WebBrowser.maybeCompleteAuthSession();
 
 type AuthMode = 'signup' | 'signin';
 
@@ -130,17 +135,55 @@ export default function AccountScreen() {
     setError(null);
 
     try {
-      const { error } = await supabase.auth.signInWithOAuth({
+      // Create redirect URL using expo-auth-session
+      const redirectUrl = AuthSession.makeRedirectUri({
+        scheme: 'chartsignl',
+        path: 'auth/callback',
+      });
+
+      console.log('OAuth Redirect URL:', redirectUrl); // For debugging
+
+      const { data, error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
-          redirectTo: 'chartsignl://auth/callback',
+          redirectTo: redirectUrl,
+          skipBrowserRedirect: false,
         },
       });
 
       if (error) throw error;
+
+      // If we get a URL back, open it in the browser
+      // The browser will redirect back to our app with the tokens
+      if (data?.url) {
+        const result = await WebBrowser.openAuthSessionAsync(
+          data.url,
+          redirectUrl
+        );
+
+        // Handle the result - if user cancels, reset loading state
+        if (result.type === 'cancel') {
+          setIsLoading(false);
+          return;
+        }
+
+        // The callback handler will process the result
+        // We don't need to do anything else here
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Authentication failed');
-    } finally {
+      let errorMessage = 'Authentication failed';
+      
+      if (err instanceof Error) {
+        if (err.message.includes('Provider not enabled')) {
+          errorMessage = 'This sign-in method is not configured yet. Please contact support or use email sign-in.';
+        } else if (err.message.includes('redirect') || err.message.includes('Redirect')) {
+          errorMessage = 'OAuth redirect not configured. Check Supabase settings.';
+        } else {
+          errorMessage = err.message;
+        }
+      }
+      
+      setError(errorMessage);
       setIsLoading(false);
     }
   };
