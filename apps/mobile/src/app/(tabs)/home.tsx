@@ -8,6 +8,7 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
+  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -41,6 +42,7 @@ export default function HomeScreen() {
     resistance: [],
   });
   const [showLevels, setShowLevels] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Fetch usage stats
   const { data: usage } = useQuery({
@@ -135,17 +137,24 @@ export default function HomeScreen() {
     }
 
     setIsAnalyzing(true);
+    setErrorMessage(null); // Clear previous errors
 
     try {
       const analysis = await analyzeChartData(selectedSymbol, selectedInterval, chartData);
       setAiAnalysis(analysis);
       setShowLevels(true);
+      setErrorMessage(null); // Clear any previous errors on success
 
       // Refresh usage
       queryClient.invalidateQueries({ queryKey: ['usage'] });
     } catch (err) {
       console.error('AI analysis error:', err);
-      Alert.alert('Analysis Failed', err instanceof Error ? err.message : 'Please try again');
+      const errorMsg = err instanceof Error ? err.message : 'Please try again';
+      setErrorMessage(errorMsg); // Set error message for web display
+      // Show alert on native platforms only
+      if (Platform.OS !== 'web') {
+        Alert.alert('Analysis Failed', errorMsg);
+      }
     } finally {
       setIsAnalyzing(false);
     }
@@ -357,6 +366,11 @@ export default function HomeScreen() {
                 : 'primary'
             }
           />
+          {errorMessage && (
+            <View style={styles.errorBanner}>
+              <Text style={styles.errorText}>⚠️ {errorMessage}</Text>
+            </View>
+          )}
           <Text style={[
             styles.aiHint,
             !usage?.isPro && usage && usage.freeAnalysesUsed >= FREE_ANALYSIS_LIMIT && styles.aiHintWarning
@@ -742,6 +756,19 @@ const styles = StyleSheet.create({
   aiHintWarning: {
     color: colors.primary[600],
     fontWeight: '600',
+  },
+  errorBanner: {
+    backgroundColor: colors.red[50],
+    borderColor: colors.red[300],
+    borderWidth: 1,
+    borderRadius: borderRadius.md,
+    padding: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  errorText: {
+    ...typography.bodySm,
+    color: colors.red[700],
+    textAlign: 'center',
   },
   // Analysis card
   analysisCard: {

@@ -29,8 +29,8 @@ export async function analyzeChartData(
   });
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: 'Analysis failed' }));
-    throw new Error(error.error || 'Failed to analyze chart');
+    const errorData = await response.json().catch(() => ({ error: 'Analysis failed' }));
+    throw new Error(errorData.error || 'Failed to analyze chart');
   }
 
   const result: EnhancedAnalysisResponse = await response.json();

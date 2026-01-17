@@ -233,12 +233,13 @@ analyzeDataRoute.post('/', async (c) => {
     const userPrompt = buildUserPrompt(symbol, interval, indicators, scoredAnalysis);
 
     const completion = await openai.chat.completions.create({
-      model: 'gpt-5-mini', // Change from 'gpt-4o'
+      model: 'gpt-4o-mini',
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
         { role: 'user', content: userPrompt },
       ],
       max_completion_tokens: 800,
+      temperature: 0.3,
       response_format: { type: 'json_object' },
     });
 
