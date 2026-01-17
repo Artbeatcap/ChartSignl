@@ -44,8 +44,7 @@ export async function analyzeChartWithVision(imageUrl: string): Promise<VisionAn
           ],
         },
       ],
-      max_tokens: 4096,
-      temperature: 0.3, // Lower temperature for more consistent structured output
+      max_completion_tokens: 4096,
     });
 
     const content = response.choices[0]?.message?.content;
@@ -143,8 +142,7 @@ export async function analyzeChartFromBase64(
           ],
         },
       ],
-      max_tokens: 4096,
-      temperature: 0.3,
+      max_completion_tokens: 4096,
     });
 
     const content = response.choices[0]?.message?.content;

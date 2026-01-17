@@ -238,8 +238,7 @@ analyzeDataRoute.post('/', async (c) => {
         { role: 'system', content: SYSTEM_PROMPT },
         { role: 'user', content: userPrompt },
       ],
-      max_tokens: 800,
-      temperature: 0.3,
+      max_completion_tokens: 800,
       response_format: { type: 'json_object' },
     });
 
