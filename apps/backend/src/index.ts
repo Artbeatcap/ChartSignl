@@ -1,8 +1,23 @@
-import 'dotenv/config';
+import { config } from 'dotenv';
+import { resolve } from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+import { existsSync } from 'fs';
 import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
+
+// Load .env file from apps/backend/.env
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const envPath = resolve(__dirname, '../.env');
+
+if (existsSync(envPath)) {
+  config({ path: envPath });
+} else {
+  config(); // Fallback to default dotenv behavior
+}
 
 // Routes
 import analyzeDataRoute from './routes/analyzeData.js';
@@ -21,6 +36,7 @@ const corsOrigins = process.env.CORS_ORIGINS?.split(',') || [
   'http://localhost:19006',
   'http://localhost:3000',
   'https://app.chartsignl.com',
+  'https://chartsignl.com',
 ];
 
 app.use('*', cors({
