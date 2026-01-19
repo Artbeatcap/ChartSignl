@@ -1,9 +1,9 @@
 import { useEffect } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Platform } from 'react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useAuthStore } from '../store/authStore';
+import { subscriptionService } from '../services/subscription.service';
 import { colors } from '../theme';
 
 const queryClient = new QueryClient({
@@ -19,35 +19,16 @@ export default function RootLayout() {
   const initialize = useAuthStore((state) => state.initialize);
 
   useEffect(() => {
-    // Initialize RevenueCat with lazy import to avoid module resolution issues
-    const initRevenueCat = async () => {
+    // Initialize subscription service (handles RevenueCat on mobile, skips on web)
+    const initSubscription = async () => {
       try {
-        // Lazy import to avoid loading during config evaluation
-        const Purchases = (await import('react-native-purchases')).default;
-        
-        if (Platform.OS === 'ios') {
-          const iosKey = process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY || process.env.REVENUECAT_IOS_KEY;
-          if (iosKey) {
-            await Purchases.configure({ apiKey: iosKey });
-            console.log('RevenueCat initialized for iOS');
-          } else {
-            console.warn('RevenueCat iOS key not found');
-          }
-        } else if (Platform.OS === 'android') {
-          const androidKey = process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_KEY || process.env.REVENUECAT_ANDROID_KEY;
-          if (androidKey) {
-            await Purchases.configure({ apiKey: androidKey });
-            console.log('RevenueCat initialized for Android');
-          } else {
-            console.warn('RevenueCat Android key not found');
-          }
-        }
+        await subscriptionService.initialize();
       } catch (error) {
-        console.error('Error initializing RevenueCat:', error);
+        console.error('Error initializing subscription service:', error);
       }
     };
 
-    initRevenueCat();
+    initSubscription();
     initialize();
   }, [initialize]);
 

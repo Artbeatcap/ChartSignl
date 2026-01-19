@@ -73,3 +73,43 @@ export async function updateProfile(data: Record<string, unknown>): Promise<{ su
     body: JSON.stringify(data),
   });
 }
+
+// Subscription API methods
+export interface SubscriptionStatusResponse {
+  isActive: boolean;
+  expiresAt?: string;
+  currentPeriodStart?: string;
+  currentPeriodEnd?: string;
+  platform?: 'web' | 'ios' | 'android';
+}
+
+export async function getSubscriptionStatus(): Promise<SubscriptionStatusResponse> {
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/77853d40-2630-465b-b1da-310f30bd4208',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'api.ts:86',message:'getSubscriptionStatus called',data:{endpoint:'/api/subscription/status'},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'A'})}).catch(()=>{});
+  // #endregion
+  try {
+    const result = await apiFetch('/api/subscription/status');
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/77853d40-2630-465b-b1da-310f30bd4208',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'api.ts:90',message:'getSubscriptionStatus success',data:{hasResult:!!result},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
+    return result;
+  } catch (error) {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/77853d40-2630-465b-b1da-310f30bd4208',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'api.ts:95',message:'getSubscriptionStatus error',data:{error:error instanceof Error?error.message:String(error)},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
+    throw error;
+  }
+}
+
+export interface CheckoutSessionResponse {
+  checkoutUrl: string;
+}
+
+export async function createCheckoutSession(): Promise<CheckoutSessionResponse> {
+  return apiFetch('/api/subscription/create-checkout', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+}

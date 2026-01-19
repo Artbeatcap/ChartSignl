@@ -3,12 +3,11 @@ import type { MarketDataPoint } from '@chartsignl/core';
 
 const marketDataRoute = new Hono();
 
-// Polygon.io configuration
-const POLYGON_API_KEY = process.env.POLYGON_API_KEY || '';
-const POLYGON_BASE_URL = 'https://api.polygon.io';
+// Massive.com configuration
+const MASSIVE_BASE_URL = 'https://api.massive.com';
 
-// Interval mapping for Polygon.io
-// Polygon uses: minute, hour, day, week, month, quarter, year
+// Interval mapping for Massive.com
+// Massive uses: minute, hour, day, week, month, quarter, year
 // With multipliers like 1, 5, 15 for minutes
 const intervalConfig: Record<string, { timespan: string; multiplier: number; daysBack: number }> = {
   '1d': { timespan: 'minute', multiplier: 5, daysBack: 1 },
@@ -21,19 +20,28 @@ const intervalConfig: Record<string, { timespan: string; multiplier: number; day
   '5y': { timespan: 'week', multiplier: 1, daysBack: 1825 },
 };
 
-// Format date as YYYY-MM-DD for Polygon
+// Format date as YYYY-MM-DD for Massive
 function formatDate(date: Date): string {
   return date.toISOString().split('T')[0];
 }
 
 // GET /api/market-data/:symbol
 marketDataRoute.get('/:symbol', async (c) => {
+  const symbol = c.req.param('symbol');
+  
   try {
-    const symbol = c.req.param('symbol').toUpperCase();
+    const MASSIVE_API_KEY = 'RcnenBuGTzPs3aaunhpWW6FpaAzs60Ug';
+    console.log('[ROUTE] Market data route hit for symbol:', symbol, 'API key available:', !!MASSIVE_API_KEY);
+    
+    const symbolUpper = c.req.param('symbol').toUpperCase();
     const chartInterval = c.req.query('interval') || '3mo';
-
-    if (!POLYGON_API_KEY) {
-      return c.json({ error: 'Polygon API key not configured' }, 500);
+    
+    if (!MASSIVE_API_KEY || MASSIVE_API_KEY.trim() === '') {
+      console.error('[ROUTE ERROR] MASSIVE_API_KEY is not set or empty');
+      return c.json({ 
+        error: 'Massive API key not configured. Please set MASSIVE_API_KEY in apps/backend/.env file.',
+        details: 'Get your free API key at https://massive.com'
+      }, 500);
     }
 
     const config = intervalConfig[chartInterval] || intervalConfig['3mo'];
@@ -43,15 +51,15 @@ marketDataRoute.get('/:symbol', async (c) => {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - config.daysBack);
 
-    // Build Polygon URL
+    // Build Massive URL
     // Format: /v2/aggs/ticker/{ticker}/range/{multiplier}/{timespan}/{from}/{to}
-    const url = `${POLYGON_BASE_URL}/v2/aggs/ticker/${encodeURIComponent(symbol)}/range/${config.multiplier}/${config.timespan}/${formatDate(startDate)}/${formatDate(endDate)}?adjusted=true&sort=asc&limit=5000&apiKey=${POLYGON_API_KEY}`;
+    const url = `${MASSIVE_BASE_URL}/v2/aggs/ticker/${encodeURIComponent(symbolUpper)}/range/${config.multiplier}/${config.timespan}/${formatDate(startDate)}/${formatDate(endDate)}?adjusted=true&sort=asc&limit=5000&apiKey=${MASSIVE_API_KEY}`;
 
     const response = await fetch(url);
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      console.error('Polygon API error:', response.status, errorData);
+      console.error('Massive API error:', response.status, errorData);
       
       if (response.status === 403) {
         return c.json({ error: 'API rate limit exceeded. Please try again later.' }, 429);
@@ -72,8 +80,8 @@ marketDataRoute.get('/:symbol', async (c) => {
       return c.json({ error: 'No data available for this symbol' }, 404);
     }
 
-    // Transform Polygon data to our format
-    // Polygon returns: t (timestamp), o (open), h (high), l (low), c (close), v (volume), vw (vwap), n (transactions)
+    // Transform Massive data to our format
+    // Massive returns: t (timestamp), o (open), h (high), l (low), c (close), v (volume), vw (vwap), n (transactions)
     const data: MarketDataPoint[] = json.results.map((bar: any) => ({
       timestamp: bar.t, // Already in milliseconds
       date: new Date(bar.t).toISOString(),
@@ -84,12 +92,13 @@ marketDataRoute.get('/:symbol', async (c) => {
       volume: bar.v || 0,
     }));
 
-    return c.json({
-      symbol,
+    const responseData = {
+      symbol: symbolUpper,
       interval: chartInterval,
       resultsCount: json.resultsCount,
       data,
-    });
+    };
+    return c.json(responseData);
   } catch (error) {
     console.error('Market data error:', error);
     return c.json(
@@ -102,14 +111,15 @@ marketDataRoute.get('/:symbol', async (c) => {
 // GET /api/market-data/:symbol/quote - Get current quote
 marketDataRoute.get('/:symbol/quote', async (c) => {
   try {
+    const MASSIVE_API_KEY = process.env.MASSIVE_API_KEY || '';
     const symbol = c.req.param('symbol').toUpperCase();
 
-    if (!POLYGON_API_KEY) {
-      return c.json({ error: 'Polygon API key not configured' }, 500);
+    if (!MASSIVE_API_KEY) {
+      return c.json({ error: 'Massive API key not configured' }, 500);
     }
 
     // Get previous day's close for reference
-    const url = `${POLYGON_BASE_URL}/v2/aggs/ticker/${encodeURIComponent(symbol)}/prev?adjusted=true&apiKey=${POLYGON_API_KEY}`;
+    const url = `${MASSIVE_BASE_URL}/v2/aggs/ticker/${encodeURIComponent(symbol)}/prev?adjusted=true&apiKey=${MASSIVE_API_KEY}`;
 
     const response = await fetch(url);
 
@@ -147,14 +157,15 @@ marketDataRoute.get('/:symbol/quote', async (c) => {
 // GET /api/market-data/search - Search for symbols
 marketDataRoute.get('/search/:query', async (c) => {
   try {
+    const MASSIVE_API_KEY = process.env.MASSIVE_API_KEY || '';
     const query = c.req.param('query');
 
-    if (!POLYGON_API_KEY) {
-      return c.json({ error: 'Polygon API key not configured' }, 500);
+    if (!MASSIVE_API_KEY) {
+      return c.json({ error: 'Massive API key not configured' }, 500);
     }
 
     // Filter for stocks market only and limit to 50 results for better filtering
-    const url = `${POLYGON_BASE_URL}/v3/reference/tickers?search=${encodeURIComponent(query)}&market=stocks&active=true&limit=50&apiKey=${POLYGON_API_KEY}`;
+    const url = `${MASSIVE_BASE_URL}/v3/reference/tickers?search=${encodeURIComponent(query)}&market=stocks&active=true&limit=50&apiKey=${MASSIVE_API_KEY}`;
 
     const response = await fetch(url);
 
