@@ -184,16 +184,27 @@ export default function HomeScreen() {
             </Text>
             <Text style={styles.subtitle}>Find the key levels</Text>
           </View>
-          <View style={[
-            styles.usageBadge,
-            !usage?.isPro && usage && usage.freeAnalysesUsed >= FREE_ANALYSIS_LIMIT && styles.usageBadgeWarning
-          ]}>
-            <Text style={[
-              styles.usageText,
-              !usage?.isPro && usage && usage.freeAnalysesUsed >= FREE_ANALYSIS_LIMIT && styles.usageTextWarning
+          <View style={styles.headerRight}>
+            <View style={[
+              styles.usageBadge,
+              !usage?.isPro && usage && usage.freeAnalysesUsed >= FREE_ANALYSIS_LIMIT && styles.usageBadgeWarning
             ]}>
-              {usage?.isPro ? '✨ Pro' : usage ? `${remainingAnalyses} left` : '...'}
-            </Text>
+              <Text style={[
+                styles.usageText,
+                !usage?.isPro && usage && usage.freeAnalysesUsed >= FREE_ANALYSIS_LIMIT && styles.usageTextWarning
+              ]}>
+                {usage?.isPro ? '✨ Pro' : usage ? `${remainingAnalyses} left` : '...'}
+              </Text>
+            </View>
+            {!usage?.isPro && usage && (
+              <Button
+                title="✨ Upgrade"
+                onPress={() => router.push('/premium')}
+                variant="outline"
+                size="sm"
+                style={styles.upgradeButton}
+              />
+            )}
           </View>
         </View>
 
@@ -536,6 +547,10 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     marginBottom: spacing.lg,
   },
+  headerRight: {
+    alignItems: 'flex-end',
+    gap: spacing.xs,
+  },
   greeting: {
     ...typography.headingLg,
     color: colors.neutral[900],
@@ -550,6 +565,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
     borderRadius: borderRadius.full,
+  },
+  upgradeButton: {
+    marginTop: spacing.xs,
   },
   usageText: {
     ...typography.labelSm,
