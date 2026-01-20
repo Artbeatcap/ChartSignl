@@ -10,15 +10,16 @@ const POLYGON_BASE_URL = 'https://api.polygon.io';
 // Interval mapping for Polygon.io
 // Polygon uses: minute, hour, day, week, month, quarter, year
 // With multipliers like 1, 5, 15 for minutes
-const intervalConfig: Record<string, { timespan: string; multiplier: number; daysBack: number }> = {
-  '1d': { timespan: 'minute', multiplier: 5, daysBack: 1 },
-  '5d': { timespan: 'minute', multiplier: 30, daysBack: 5 },
-  '1mo': { timespan: 'hour', multiplier: 1, daysBack: 30 },
-  '3mo': { timespan: 'day', multiplier: 1, daysBack: 90 },
-  '6mo': { timespan: 'day', multiplier: 1, daysBack: 180 },
-  '1y': { timespan: 'day', multiplier: 1, daysBack: 365 },
-  '2y': { timespan: 'week', multiplier: 1, daysBack: 730 },
-  '5y': { timespan: 'week', multiplier: 1, daysBack: 1825 },
+// emaWarmup: extra bars to fetch for EMA calculation (21 EMA needs 21 bars to start)
+const intervalConfig: Record<string, { timespan: string; multiplier: number; daysBack: number; emaWarmup: number }> = {
+  '1d': { timespan: 'minute', multiplier: 5, daysBack: 1, emaWarmup: 0 }, // Intraday - no warmup needed
+  '5d': { timespan: 'minute', multiplier: 30, daysBack: 5, emaWarmup: 0 }, // Intraday - no warmup needed
+  '1mo': { timespan: 'hour', multiplier: 1, daysBack: 30, emaWarmup: 30 }, // 30 extra hours for warmup
+  '3mo': { timespan: 'day', multiplier: 1, daysBack: 90, emaWarmup: 30 }, // 30 extra days for warmup
+  '6mo': { timespan: 'day', multiplier: 1, daysBack: 180, emaWarmup: 30 },
+  '1y': { timespan: 'day', multiplier: 1, daysBack: 365, emaWarmup: 30 },
+  '2y': { timespan: 'week', multiplier: 1, daysBack: 730, emaWarmup: 30 },
+  '5y': { timespan: 'week', multiplier: 1, daysBack: 1825, emaWarmup: 30 },
 };
 
 // Format date as YYYY-MM-DD for Polygon
@@ -38,14 +39,26 @@ marketDataRoute.get('/:symbol', async (c) => {
 
     const config = intervalConfig[chartInterval] || intervalConfig['3mo'];
 
-    // Calculate date range
+    // Calculate date range - include EMA warmup period
     const endDate = new Date();
     const startDate = new Date();
-    startDate.setDate(startDate.getDate() - config.daysBack);
+    
+    // For intraday intervals, add buffer to account for weekends/holidays
+    let dateBuffer = 0;
+    if (chartInterval === '1d') {
+      dateBuffer = 7; // Request 8 calendar days to cover long closures
+    } else if (chartInterval === '5d') {
+      dateBuffer = 10; // Request 15 calendar days to cover closures + weekends
+    }
+    
+    // Fetch extra days/bars for EMA warmup calculation and weekend buffer
+    startDate.setDate(startDate.getDate() - config.daysBack - config.emaWarmup - dateBuffer);
 
     // Build Polygon URL
     // Format: /v2/aggs/ticker/{ticker}/range/{multiplier}/{timespan}/{from}/{to}
-    const url = `${POLYGON_BASE_URL}/v2/aggs/ticker/${encodeURIComponent(symbol)}/range/${config.multiplier}/${config.timespan}/${formatDate(startDate)}/${formatDate(endDate)}?adjusted=true&sort=asc&limit=5000&apiKey=${POLYGON_API_KEY}`;
+    const fromParam = startDate.getTime();
+    const toParam = endDate.getTime();
+    const url = `${POLYGON_BASE_URL}/v2/aggs/ticker/${encodeURIComponent(symbol)}/range/${config.multiplier}/${config.timespan}/${fromParam}/${toParam}?adjusted=true&sort=asc&limit=5000&apiKey=${POLYGON_API_KEY}`;
 
     const response = await fetch(url);
 
@@ -84,10 +97,19 @@ marketDataRoute.get('/:symbol', async (c) => {
       volume: bar.v || 0,
     }));
 
+    // Calculate visible start index based on warmup bars
+    // This tells the frontend where the actual visible chart data starts
+    // The warmup data is used for EMA calculation but not displayed
+    const emaWarmupBars = config.emaWarmup;
+    const visibleStartIndex = Math.min(emaWarmupBars, data.length);
+
     return c.json({
       symbol,
       interval: chartInterval,
       resultsCount: json.resultsCount,
+      totalBars: data.length,
+      emaWarmupBars, // Number of warmup bars fetched
+      visibleStartIndex, // Index where visible data starts (after warmup)
       data,
     });
   } catch (error) {

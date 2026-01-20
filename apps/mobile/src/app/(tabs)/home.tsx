@@ -13,7 +13,7 @@ import { useRouter } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, Card, SymbolSearch, StockChart, EmailVerificationBanner } from '../../components';
 import { useAuthStore } from '../../store/authStore';
-import { fetchMarketData, addIndicators, formatPrice, calculatePriceChange } from '../../lib/marketData';
+import { fetchMarketDataWithIndicators, formatPrice, calculatePriceChange } from '../../lib/marketData';
 import { findLocalLevels, detectTrend, analyzeChartData } from '../../lib/chartAnalysis';
 import { getUsage } from '../../lib/api';
 import { colors, typography, spacing, borderRadius, shadows } from '../../theme';
@@ -49,28 +49,22 @@ export default function HomeScreen() {
     staleTime: 1000 * 60,
   });
 
-  // Fetch market data
+  // Fetch market data with indicators (includes EMA warmup handling)
   const {
-    data: rawData,
+    data: chartData,
     isLoading: isLoadingData,
     error: dataError,
     refetch,
   } = useQuery({
     queryKey: ['marketData', selectedSymbol, selectedInterval],
-    queryFn: () => fetchMarketData(selectedSymbol, selectedInterval),
+    queryFn: () => fetchMarketDataWithIndicators(selectedSymbol, selectedInterval),
     staleTime: 1000 * 60 * 5, // 5 minutes
     retry: 2,
   });
 
-  // Process data with indicators
-  const chartData = useMemo(() => {
-    if (!rawData || rawData.length === 0) return [];
-    return addIndicators(rawData);
-  }, [rawData]);
-
   // Calculate local levels when data changes
   useEffect(() => {
-    if (chartData.length > 0) {
+    if (chartData && chartData.length > 0) {
       const levels = findLocalLevels(chartData);
       setLocalLevels(levels);
     }
@@ -86,15 +80,15 @@ export default function HomeScreen() {
 
   // Price change calculation
   const priceChange = useMemo(() => {
-    return calculatePriceChange(chartData);
+    return calculatePriceChange(chartData || []);
   }, [chartData]);
 
   // Current price
-  const currentPrice = chartData.length > 0 ? chartData[chartData.length - 1].close : 0;
+  const currentPrice = chartData && chartData.length > 0 ? chartData[chartData.length - 1].close : 0;
 
   // Trend detection
   const trend = useMemo(() => {
-    return detectTrend(chartData);
+    return detectTrend(chartData || []);
   }, [chartData]);
 
   const remainingAnalyses = usage?.isPro
@@ -137,6 +131,9 @@ export default function HomeScreen() {
     setIsAnalyzing(true);
 
     try {
+      if (!chartData || chartData.length === 0) {
+        throw new Error('No chart data available');
+      }
       const analysis = await analyzeChartData(selectedSymbol, selectedInterval, chartData);
       setAiAnalysis(analysis);
       setShowLevels(true);
@@ -311,7 +308,7 @@ export default function HomeScreen() {
             </View>
           ) : (
             <StockChart
-              data={chartData}
+              data={chartData || []}
               symbol={selectedSymbol}
               interval={selectedInterval}
               viewType={viewType}
@@ -361,7 +358,7 @@ export default function HomeScreen() {
             size="lg"
             fullWidth
             loading={isAnalyzing}
-            disabled={isLoadingData || chartData.length === 0 || !usage}
+            disabled={isLoadingData || !chartData || chartData.length === 0 || !usage}
             variant={
               !usage?.isPro && usage && usage.freeAnalysesUsed >= FREE_ANALYSIS_LIMIT
                 ? 'secondary'

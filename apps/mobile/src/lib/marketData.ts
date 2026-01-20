@@ -2,11 +2,30 @@ import type { MarketDataPoint, ChartInterval } from '@chartsignl/core';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:4000';
 
-// Fetch market data from our backend (which proxies to Yahoo Finance)
+// Response type from backend with warmup metadata
+interface MarketDataResponse {
+  symbol: string;
+  interval: string;
+  resultsCount: number;
+  totalBars: number;
+  emaWarmupBars: number;
+  visibleStartIndex: number;
+  data: MarketDataPoint[];
+}
+
+// Return type for fetchMarketData
+interface FetchMarketDataResult {
+  data: MarketDataPoint[];
+  visibleStartIndex: number;
+  emaWarmupBars: number;
+}
+
+// Fetch market data from our backend (which proxies to Polygon.io)
+// Now returns warmup metadata for EMA calculation
 export async function fetchMarketData(
   symbol: string,
   interval: ChartInterval = '3mo'
-): Promise<MarketDataPoint[]> {
+): Promise<FetchMarketDataResult> {
   const response = await fetch(
     `${API_URL}/api/market-data/${encodeURIComponent(symbol)}?interval=${interval}`
   );
@@ -16,8 +35,22 @@ export async function fetchMarketData(
     throw new Error(error.error || 'Failed to fetch market data');
   }
 
-  const data = await response.json();
-  return data.data;
+  const json: MarketDataResponse = await response.json();
+  
+  return {
+    data: json.data,
+    visibleStartIndex: json.visibleStartIndex || 0,
+    emaWarmupBars: json.emaWarmupBars || 0,
+  };
+}
+
+// Legacy function for backwards compatibility - returns just the data array
+export async function fetchMarketDataLegacy(
+  symbol: string,
+  interval: ChartInterval = '3mo'
+): Promise<MarketDataPoint[]> {
+  const result = await fetchMarketData(symbol, interval);
+  return result.data;
 }
 
 // Calculate EMA (Exponential Moving Average)
@@ -41,7 +74,7 @@ export function calculateEMA(data: number[], period: number): (number | undefine
   return ema;
 }
 
-// Add EMAs to market data
+// Add EMAs to market data (original function - keeps all data including warmup)
 export function addIndicators(data: MarketDataPoint[]): MarketDataPoint[] {
   const closes = data.map((d) => d.close);
 
@@ -55,6 +88,44 @@ export function addIndicators(data: MarketDataPoint[]): MarketDataPoint[] {
     ema21: ema21[i],
     ema50: ema50[i],
   }));
+}
+
+// Add EMAs to market data AND trim warmup period
+// This ensures EMAs are calculated with historical data but only visible range is returned
+// The EMAs will have values from the first visible bar instead of starting with undefined
+export function addIndicatorsAndTrim(
+  data: MarketDataPoint[],
+  visibleStartIndex: number
+): MarketDataPoint[] {
+  if (data.length === 0) return [];
+  
+  const closes = data.map((d) => d.close);
+
+  // Calculate EMAs on the FULL dataset (including warmup)
+  const ema9 = calculateEMA(closes, 9);
+  const ema21 = calculateEMA(closes, 21);
+  const ema50 = calculateEMA(closes, 50);
+
+  // Add indicators to all data points
+  const dataWithIndicators = data.map((point, i) => ({
+    ...point,
+    ema9: ema9[i],
+    ema21: ema21[i],
+    ema50: ema50[i],
+  }));
+
+  // Trim warmup data - only return visible range
+  // Now the first visible bar will have EMA values (not undefined)
+  return dataWithIndicators.slice(visibleStartIndex);
+}
+
+// Convenience function that fetches data and adds indicators in one call
+export async function fetchMarketDataWithIndicators(
+  symbol: string,
+  interval: ChartInterval = '3mo'
+): Promise<MarketDataPoint[]> {
+  const { data, visibleStartIndex } = await fetchMarketData(symbol, interval);
+  return addIndicatorsAndTrim(data, visibleStartIndex);
 }
 
 // Format price for display
