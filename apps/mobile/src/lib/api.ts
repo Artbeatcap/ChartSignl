@@ -73,3 +73,26 @@ export async function updateProfile(data: Record<string, unknown>): Promise<{ su
     body: JSON.stringify(data),
   });
 }
+
+// Get subscription status
+export async function getSubscriptionStatus(): Promise<{
+  success: boolean;
+  isPro: boolean;
+  expiresAt: string | null;
+  platform: string | null;
+}> {
+  return apiFetch('/api/subscription/status');
+}
+
+// Create Stripe checkout session
+export async function createCheckoutSession(): Promise<{
+  success: boolean;
+  checkoutUrl: string;
+}> {
+  return apiFetch('/api/subscription/create-checkout', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+}

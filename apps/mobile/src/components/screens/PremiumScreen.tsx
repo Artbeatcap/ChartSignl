@@ -7,32 +7,14 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  Linking,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Platform } from 'react-native';
-// Lazy import to avoid module resolution issues during config evaluation
-// import Purchases, { PurchasesOffering, PurchasesPackage } from 'react-native-purchases';
-// Type imports cause Metro to bundle the module for web, so we define types locally
-type PurchasesOffering = {
-  current: {
-    availablePackages: PurchasesPackage[];
-  } | null;
-};
-
-type PurchasesPackage = {
-  identifier: string;
-  packageType: string;
-  product: {
-    identifier: string;
-    priceString: string;
-    price: number;
-    currencyCode: string;
-  };
-};
-
 import { Card, Button } from '../index';
 import { useAuthStore } from '../../store/authStore';
+import { subscriptionService } from '../../services/subscription.service';
 import { colors, typography, spacing, borderRadius, shadows } from '../../theme';
 
 interface PremiumFeature {
@@ -77,118 +59,72 @@ const PREMIUM_FEATURES: PremiumFeature[] = [
 export default function PremiumScreen() {
   const router = useRouter();
   const { refreshSubscription, user } = useAuthStore();
-  const [offerings, setOfferings] = useState<PurchasesOffering | null>(null);
-  const [selectedPackage, setSelectedPackage] = useState<PurchasesPackage | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
 
   useEffect(() => {
-    if (Platform.OS !== 'web') {
-      loadOfferings();
-    } else {
-      setIsLoading(false);
-    }
+    // On web, we don't need to load offerings (Stripe handles pricing)
+    // On mobile, offerings are loaded when user tries to purchase
+    setIsLoading(false);
   }, []);
 
-  const loadOfferings = async () => {
-    if (Platform.OS === 'web') {
-      setIsLoading(false);
-      return;
-    }
-    
-    try {
-      setIsLoading(true);
-      // Lazy import to avoid loading during config evaluation
-      const Purchases = (await import('react-native-purchases')).default;
-      const offeringsData = await Purchases.getOfferings();
-      
-      if (offeringsData.current !== null) {
-        setOfferings(offeringsData.current);
-        // Select the first available package (monthly)
-        const monthlyPackage = offeringsData.current.availablePackages.find(
-          (pkg) => pkg.identifier === '$rc_monthly' || pkg.packageType === 'MONTHLY'
-        ) || offeringsData.current.availablePackages[0];
-        
-        if (monthlyPackage) {
-          setSelectedPackage(monthlyPackage);
-        }
-      } else {
-        Alert.alert(
-          'No Plans Available',
-          'Subscription plans are not available at the moment. Please try again later.',
-          [
-            { text: 'Retry', onPress: loadOfferings },
-            { text: 'Cancel', style: 'cancel', onPress: () => router.back() },
-          ]
-        );
-      }
-    } catch (error) {
-      console.error('Error loading offerings:', error);
-      Alert.alert(
-        'Error',
-        'Failed to load subscription plans. Please check your connection and try again.',
-        [
-          { text: 'Retry', onPress: loadOfferings },
-          { text: 'Cancel', style: 'cancel', onPress: () => router.back() },
-        ]
-      );
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const handlePurchase = async () => {
-    if (Platform.OS === 'web') {
-      Alert.alert('Not Available', 'In-app purchases are not available on web. Please use the mobile app.');
-      return;
-    }
+    console.log('[PremiumScreen] Purchase button clicked');
     
-    if (!selectedPackage) {
-      Alert.alert('Error', 'Please select a subscription plan.');
-      return;
-    }
-
     if (!user) {
+      console.log('[PremiumScreen] No user found');
       Alert.alert('Error', 'You must be logged in to purchase a subscription.');
       return;
     }
 
+    console.log('[PremiumScreen] User found:', user.id);
+    console.log('[PremiumScreen] Platform:', Platform.OS);
+
     try {
       setIsPurchasing(true);
-      
-      // Lazy import to avoid loading during config evaluation
-      const Purchases = (await import('react-native-purchases')).default;
-      
-      // Identify user with RevenueCat
-      await Purchases.logIn(user.id);
-      
-      const purchaseResult = await Purchases.purchasePackage(selectedPackage);
-      
-      if (purchaseResult.customerInfo.entitlements.active['premium']) {
-        // Premium activated!
-        await refreshSubscription();
-        
-        Alert.alert(
-          'Welcome to Premium! 🎉',
-          'Your subscription is now active. Enjoy unlimited access to all premium features!',
-          [
-            {
-              text: 'Get Started',
-              onPress: () => {
-                router.back();
-              },
-            },
-          ]
-        );
-      } else {
-        Alert.alert('Error', 'Purchase completed but premium was not activated. Please contact support.');
+      console.log('[PremiumScreen] Starting purchase flow...');
+
+      if (Platform.OS === 'web') {
+        console.log('[PremiumScreen] Web platform - creating Stripe checkout');
+        // On web, subscription service will redirect to Stripe Checkout
+        await subscriptionService.purchaseSubscription();
+        console.log('[PremiumScreen] Redirecting to Stripe Checkout');
+        // Note: User will be redirected away, so we don't need to handle success here
+        return;
       }
-    } catch (error: any) {
-      console.error('Purchase error:', error);
+
+      console.log('[PremiumScreen] Mobile platform - using RevenueCat');
+      // On mobile, use RevenueCat
+      await subscriptionService.purchaseSubscription();
+      console.log('[PremiumScreen] Purchase successful, refreshing subscription');
       
-      if (error.userCancelled) {
+      // If we get here, purchase was successful
+      await refreshSubscription();
+      
+      Alert.alert(
+        'Welcome to Premium! 🎉',
+        'Your subscription is now active. Enjoy unlimited access to all premium features!',
+        [
+          {
+            text: 'Get Started',
+            onPress: () => {
+              router.back();
+            },
+          },
+        ]
+      );
+    } catch (error: any) {
+      console.error('[PremiumScreen] Purchase error:', error);
+      console.error('[PremiumScreen] Error details:', {
+        message: error?.message,
+        userCancelled: error?.userCancelled,
+        stack: error?.stack,
+      });
+      
+      if (error.userCancelled || error.message?.includes('cancelled')) {
         // User cancelled, don't show error
+        console.log('[PremiumScreen] User cancelled purchase');
         return;
       }
       
@@ -199,12 +135,17 @@ export default function PremiumScreen() {
       );
     } finally {
       setIsPurchasing(false);
+      console.log('[PremiumScreen] Purchase flow completed');
     }
   };
 
   const handleRestore = async () => {
     if (Platform.OS === 'web') {
-      Alert.alert('Not Available', 'Restore purchases is not available on web. Please use the mobile app.');
+      Alert.alert(
+        'Not Available',
+        'Restore purchases is not available on web. Your subscription status is automatically synced from your account.',
+        [{ text: 'OK' }]
+      );
       return;
     }
     
@@ -216,35 +157,30 @@ export default function PremiumScreen() {
     try {
       setIsRestoring(true);
       
-      // Lazy import to avoid loading during config evaluation
-      const Purchases = (await import('react-native-purchases')).default;
+      await subscriptionService.restorePurchases(user.id);
+      await refreshSubscription();
       
-      // Identify user with RevenueCat
-      await Purchases.logIn(user.id);
+      Alert.alert(
+        'Purchases Restored',
+        'Your premium subscription has been restored successfully!',
+        [{ text: 'OK', onPress: () => router.back() }]
+      );
+    } catch (error: any) {
+      console.error('Restore error:', error);
       
-      const customerInfo = await Purchases.restorePurchases();
-      
-      if (customerInfo.entitlements.active['premium']) {
-        await refreshSubscription();
-        Alert.alert(
-          'Purchases Restored',
-          'Your premium subscription has been restored successfully!',
-          [{ text: 'OK', onPress: () => router.back() }]
-        );
-      } else {
+      if (error.message?.includes('No active subscriptions')) {
         Alert.alert(
           'No Purchases Found',
           'We couldn\'t find any active subscriptions to restore.',
           [{ text: 'OK' }]
         );
+      } else {
+        Alert.alert(
+          'Restore Failed',
+          error.message || 'Failed to restore purchases. Please try again.',
+          [{ text: 'OK' }]
+        );
       }
-    } catch (error: any) {
-      console.error('Restore error:', error);
-      Alert.alert(
-        'Restore Failed',
-        error.message || 'Failed to restore purchases. Please try again.',
-        [{ text: 'OK' }]
-      );
     } finally {
       setIsRestoring(false);
     }
@@ -296,19 +232,29 @@ export default function PremiumScreen() {
         </Card>
 
         {/* Subscription Plan */}
-        {offerings && selectedPackage && (
+        {Platform.OS !== 'web' && (
           <Card style={styles.planCard}>
             <Text style={styles.sectionTitle}>Subscription Plan</Text>
             <View style={styles.planContainer}>
               <View style={styles.planInfo}>
                 <Text style={styles.planName}>Monthly Subscription</Text>
-                <Text style={styles.planPrice}>{selectedPackage.product.priceString}/month</Text>
                 <Text style={styles.planDescription}>
                   Cancel anytime. Billed monthly.
                 </Text>
               </View>
-              <View style={styles.selectedIndicator}>
-                <Ionicons name="checkmark-circle" size={24} color={colors.primary[500]} />
+            </View>
+          </Card>
+        )}
+        
+        {Platform.OS === 'web' && (
+          <Card style={styles.planCard}>
+            <Text style={styles.sectionTitle}>Subscription Plan</Text>
+            <View style={styles.planContainer}>
+              <View style={styles.planInfo}>
+                <Text style={styles.planName}>Monthly Subscription</Text>
+                <Text style={styles.planDescription}>
+                  You'll be redirected to Stripe Checkout to complete your purchase.
+                </Text>
               </View>
             </View>
           </Card>
@@ -317,8 +263,11 @@ export default function PremiumScreen() {
         {/* Purchase Button */}
         <Button
           title={isPurchasing ? 'Processing...' : 'Start Premium'}
-          onPress={handlePurchase}
-          disabled={isPurchasing || !selectedPackage}
+          onPress={() => {
+            console.log('[PremiumScreen] Button onPress triggered');
+            handlePurchase();
+          }}
+          disabled={isPurchasing}
           loading={isPurchasing}
           fullWidth
           style={styles.purchaseButton}

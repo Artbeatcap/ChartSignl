@@ -25,6 +25,7 @@ import analyzeDataRoute from './routes/analyzeData.js';
 import historyRoute from './routes/history.js';
 import userRoute from './routes/user.js';
 import marketDataRoute from './routes/marketData.js';
+import subscriptionRoute from './routes/subscription.js';
 
 const app = new Hono();
 
@@ -61,6 +62,7 @@ app.route('/api/analyze-data', analyzeDataRoute);
 app.route('/api/analyses', historyRoute);
 app.route('/api/user', userRoute);
 app.route('/api/market-data', marketDataRoute);
+app.route('/api/subscription', subscriptionRoute);
 
 // 404 handler
 app.notFound((c) => {

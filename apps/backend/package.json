@@ -16,6 +16,7 @@
     "dotenv": "^17.2.3",
     "hono": "^4.0.0",
     "openai": "^4.20.0",
+    "stripe": "^20.2.0",
     "zod": "^3.22.0"
   },
   "devDependencies": {
