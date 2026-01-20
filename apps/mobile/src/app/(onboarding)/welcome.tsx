@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, SafeAreaView, Image } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, Image, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Button } from '../../components';
 import { colors, typography, spacing } from '../../theme';
@@ -63,6 +63,9 @@ export default function WelcomeScreen() {
             Sign in
           </Text>
         </Text>
+        <TouchableOpacity onPress={() => router.push('/(settings)/privacy')} style={styles.footerLinkWrap}>
+          <Text style={styles.footerLink}>Privacy Policy</Text>
+        </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
@@ -162,5 +165,13 @@ const styles = StyleSheet.create({
   signInLink: {
     color: colors.primary[600],
     fontWeight: '600',
+  },
+  footerLinkWrap: {
+    marginTop: spacing.md,
+    alignItems: 'center',
+  },
+  footerLink: {
+    ...typography.bodySm,
+    color: colors.primary[600],
   },
 });

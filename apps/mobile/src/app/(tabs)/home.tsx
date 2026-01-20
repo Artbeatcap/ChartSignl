@@ -466,6 +466,12 @@ export default function HomeScreen() {
             )}
           </Card>
         )}
+
+        <View style={styles.footer}>
+          <TouchableOpacity onPress={() => router.push('/(settings)/privacy')}>
+            <Text style={styles.footerLink}>Privacy Policy</Text>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
 
       {/* Symbol Search Modal */}
@@ -936,5 +942,15 @@ const styles = StyleSheet.create({
     color: colors.red[600],
     marginBottom: spacing.xs,
     lineHeight: 22,
+  },
+  footer: {
+    marginTop: spacing.lg,
+    paddingTop: spacing.md,
+    alignItems: 'center',
+    paddingBottom: spacing.sm,
+  },
+  footerLink: {
+    ...typography.bodySm,
+    color: colors.primary[600],
   },
 });
