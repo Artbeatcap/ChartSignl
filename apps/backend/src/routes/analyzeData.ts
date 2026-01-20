@@ -4,6 +4,7 @@
 import { Hono } from 'hono';
 import OpenAI from 'openai';
 import { supabaseAdmin, getUserFromToken } from '../lib/supabase.js';
+import { getStartOfISOWeek } from '../lib/dateUtils.js';
 import { FREE_ANALYSIS_LIMIT } from '@chartsignl/core';
 
 // Import our technical analysis modules
@@ -167,18 +168,36 @@ analyzeDataRoute.post('/', async (c) => {
       .eq('id', userId)
       .single();
 
-    // Check usage limits
+    // Check usage limits (3 free analyses per week; reset each ISO week)
     const { data: usage } = await supabaseAdmin
       .from('usage_counters')
-      .select('free_analyses_used')
+      .select('free_analyses_used, free_analyses_week_start')
       .eq('user_id', userId)
       .single();
 
-    if (!profile?.is_pro && (usage?.free_analyses_used || 0) >= FREE_ANALYSIS_LIMIT) {
+    const startOfThisWeek = getStartOfISOWeek();
+    const weekStart = usage?.free_analyses_week_start ? new Date(usage.free_analyses_week_start) : null;
+    const isNewWeek = !weekStart || weekStart < startOfThisWeek;
+
+    let effectiveUsed: number;
+    if (isNewWeek) {
+      await supabaseAdmin
+        .from('usage_counters')
+        .update({
+          free_analyses_used: 0,
+          free_analyses_week_start: startOfThisWeek.toISOString(),
+        })
+        .eq('user_id', userId);
+      effectiveUsed = 0;
+    } else {
+      effectiveUsed = usage?.free_analyses_used ?? 0;
+    }
+
+    if (!profile?.is_pro && effectiveUsed >= FREE_ANALYSIS_LIMIT) {
       return c.json(
         {
           success: false,
-          error: `Free tier limit reached (${FREE_ANALYSIS_LIMIT} analyses). Please upgrade to Pro.`,
+          error: `Free tier limit reached (${FREE_ANALYSIS_LIMIT} analyses per week). Please upgrade to Pro.`,
         },
         403
       );
@@ -426,13 +445,13 @@ analyzeDataRoute.post('/', async (c) => {
     }
 
     // ========================================================================
-    // STEP 8: Update usage counter
+    // STEP 8: Update usage counter (effectiveUsed already accounts for weekly reset)
     // ========================================================================
     if (!profile?.is_pro) {
       await supabaseAdmin
         .from('usage_counters')
         .update({
-          free_analyses_used: (usage?.free_analyses_used || 0) + 1,
+          free_analyses_used: effectiveUsed + 1,
           last_analysis_at: new Date().toISOString(),
         })
         .eq('user_id', userId);

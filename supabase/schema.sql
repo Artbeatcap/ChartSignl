@@ -40,6 +40,7 @@ create index idx_profiles_email on public.profiles(email);
 create table public.usage_counters (
   user_id uuid primary key references public.profiles(id) on delete cascade,
   free_analyses_used integer default 0 not null,
+  free_analyses_week_start timestamptz,
   last_analysis_at timestamptz,
   monthly_analyses integer default 0,
   month_start date default date_trunc('month', now())::date

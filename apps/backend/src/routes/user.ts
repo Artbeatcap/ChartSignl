@@ -1,7 +1,15 @@
 import { Hono } from 'hono';
 import { supabaseAdmin, getUserFromToken } from '../lib/supabase.js';
+import { getStartOfISOWeek } from '../lib/dateUtils.js';
 import type { UsageResponse, AuthResponse } from '@chartsignl/core';
 import { FREE_ANALYSIS_LIMIT } from '@chartsignl/core';
+
+function effectiveFreeAnalysesUsed(usage: { free_analyses_used?: number; free_analyses_week_start?: string | null } | null): number {
+  if (!usage) return 0;
+  const weekStart = usage.free_analyses_week_start ? new Date(usage.free_analyses_week_start) : null;
+  if (!weekStart || weekStart < getStartOfISOWeek()) return 0;
+  return usage.free_analyses_used ?? 0;
+}
 
 const userRoute = new Hono();
 
@@ -39,10 +47,10 @@ userRoute.get('/me', async (c) => {
       }, 404);
     }
 
-    // Also get usage
+    // Also get usage (free analyses reset each week)
     const { data: usage } = await supabaseAdmin
       .from('usage_counters')
-      .select('free_analyses_used')
+      .select('free_analyses_used, free_analyses_week_start')
       .eq('user_id', userId)
       .single();
 
@@ -57,7 +65,7 @@ userRoute.get('/me', async (c) => {
         experienceLevel: profile.experience_level,
         stressReducer: profile.stress_reducer,
         isPro: profile.is_pro || false,
-        freeAnalysesUsed: usage?.free_analyses_used || 0,
+        freeAnalysesUsed: effectiveFreeAnalysesUsed(usage),
       },
     });
 
@@ -156,13 +164,13 @@ userRoute.get('/usage', async (c) => {
 
     const { data: usage } = await supabaseAdmin
       .from('usage_counters')
-      .select('free_analyses_used')
+      .select('free_analyses_used, free_analyses_week_start')
       .eq('user_id', userId)
       .single();
 
     return c.json<UsageResponse>({
       success: true,
-      freeAnalysesUsed: usage?.free_analyses_used || 0,
+      freeAnalysesUsed: effectiveFreeAnalysesUsed(usage),
       freeAnalysesLimit: FREE_ANALYSIS_LIMIT,
       isPro: profile?.is_pro || false,
     });
