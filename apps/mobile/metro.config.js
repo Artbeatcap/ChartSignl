@@ -21,4 +21,23 @@ config.resolver.extraNodeModules = {
   '@chartsignl/core': path.resolve(workspaceRoot, 'packages/core/src'),
 };
 
+// 4. Exclude react-native-purchases for web platform
+// This prevents Metro from trying to bundle the native module for web
+const originalResolveRequest = config.resolver.resolveRequest;
+config.resolver.resolveRequest = (context, moduleName, platform) => {
+  // For web platform, provide an empty mock for react-native-purchases
+  if (platform === 'web' && moduleName === 'react-native-purchases') {
+    return {
+      filePath: path.resolve(projectRoot, 'metro.web-mock.js'),
+      type: 'sourceFile',
+    };
+  }
+  
+  // Use default resolver for all other cases
+  if (originalResolveRequest) {
+    return originalResolveRequest(context, moduleName, platform);
+  }
+  return context.resolveRequest(context, moduleName, platform);
+};
+
 module.exports = config;

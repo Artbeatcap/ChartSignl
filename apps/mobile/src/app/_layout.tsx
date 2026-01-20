@@ -21,6 +21,11 @@ export default function RootLayout() {
   useEffect(() => {
     // Initialize RevenueCat with lazy import to avoid module resolution issues
     const initRevenueCat = async () => {
+      // Skip RevenueCat initialization on web platform
+      if (Platform.OS === 'web') {
+        return;
+      }
+      
       try {
         // Lazy import to avoid loading during config evaluation
         const Purchases = (await import('react-native-purchases')).default;

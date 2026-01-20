@@ -3,6 +3,7 @@ import { resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import { existsSync } from 'fs';
+import { createServer } from 'net';
 import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
@@ -75,8 +76,46 @@ app.onError((err, c) => {
   }, 500);
 });
 
+// Helper function to check if a port is available
+function isPortAvailable(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const server = createServer();
+    
+    server.once('error', (err: any) => {
+      if (err.code === 'EADDRINUSE') {
+        resolve(false);
+      } else {
+        resolve(false);
+      }
+    });
+    
+    server.once('listening', () => {
+      server.close();
+      resolve(true);
+    });
+    
+    server.listen(port);
+  });
+}
+
+// Find an available port starting from the base port
+async function findAvailablePort(startPort: number, maxAttempts: number = 10): Promise<number> {
+  for (let i = 0; i < maxAttempts; i++) {
+    const testPort = startPort + i;
+    const available = await isPortAvailable(testPort);
+    if (available) {
+      if (i > 0) {
+        console.warn(`⚠️  Port ${startPort} is already in use, using port ${testPort} instead`);
+      }
+      return testPort;
+    }
+  }
+  throw new Error(`Could not find an available port after ${maxAttempts} attempts starting from ${startPort}`);
+}
+
 // Start server
-const port = parseInt(process.env.PORT || '4000');
+const basePort = parseInt(process.env.PORT || '4000');
+const port = await findAvailablePort(basePort);
 
 console.log(`
 ╔═══════════════════════════════════════════════════╗

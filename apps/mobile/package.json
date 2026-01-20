@@ -4,7 +4,7 @@
   "private": true,
   "main": "expo-router/entry",
   "scripts": {
-    "dev": "expo start",
+    "dev": "node scripts/start-expo.js",
     "dev:web": "expo start --web",
     "dev:ios": "expo start --ios",
     "dev:android": "expo start --android",

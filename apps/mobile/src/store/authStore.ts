@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { Session, User } from '@supabase/supabase-js';
+import { Platform } from 'react-native';
 // Lazy import to avoid module resolution issues during config evaluation
 // import Purchases from 'react-native-purchases';
 import { supabase } from '../lib/supabase';
@@ -128,6 +129,25 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       return false;
     }
 
+    // On web, only check backend (RevenueCat not available)
+    if (Platform.OS === 'web') {
+      try {
+        const { data } = await supabase
+          .from('subscriptions')
+          .select('status')
+          .eq('user_id', user.id)
+          .single();
+
+        const isPremium = data?.status === 'active';
+        set({ isPremium });
+        return isPremium;
+      } catch (error) {
+        console.error('Error checking backend subscription:', error);
+        set({ isPremium: false });
+        return false;
+      }
+    }
+
     try {
       // Lazy import to avoid loading during config evaluation
       const Purchases = (await import('react-native-purchases')).default;
@@ -172,6 +192,24 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   refreshSubscription: async () => {
     const user = get().user;
     if (!user) return;
+
+    // On web, only check backend (RevenueCat not available)
+    if (Platform.OS === 'web') {
+      try {
+        const { data } = await supabase
+          .from('subscriptions')
+          .select('status')
+          .eq('user_id', user.id)
+          .single();
+
+        const isPremium = data?.status === 'active';
+        set({ isPremium });
+      } catch (error) {
+        console.error('Error checking backend subscription:', error);
+        set({ isPremium: false });
+      }
+      return;
+    }
 
     try {
       // Lazy import to avoid loading during config evaluation
@@ -222,13 +260,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   signOut: async (): Promise<boolean> => {
     try {
-      // Log out from RevenueCat first
-      try {
-        const Purchases = (await import('react-native-purchases')).default;
-        await Purchases.logOut();
-      } catch (rcError) {
-        console.log('RevenueCat logout skipped (not initialized or error):', rcError);
-        // Continue with sign out even if RevenueCat fails
+      // Log out from RevenueCat first (skip on web)
+      if (Platform.OS !== 'web') {
+        try {
+          const Purchases = (await import('react-native-purchases')).default;
+          await Purchases.logOut();
+        } catch (rcError) {
+          console.log('RevenueCat logout skipped (not initialized or error):', rcError);
+          // Continue with sign out even if RevenueCat fails
+        }
       }
       
       // Sign out from Supabase

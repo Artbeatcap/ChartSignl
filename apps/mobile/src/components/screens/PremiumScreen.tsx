@@ -10,9 +10,27 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { Platform } from 'react-native';
 // Lazy import to avoid module resolution issues during config evaluation
 // import Purchases, { PurchasesOffering, PurchasesPackage } from 'react-native-purchases';
-import type { PurchasesOffering, PurchasesPackage } from 'react-native-purchases';
+// Type imports cause Metro to bundle the module for web, so we define types locally
+type PurchasesOffering = {
+  current: {
+    availablePackages: PurchasesPackage[];
+  } | null;
+};
+
+type PurchasesPackage = {
+  identifier: string;
+  packageType: string;
+  product: {
+    identifier: string;
+    priceString: string;
+    price: number;
+    currencyCode: string;
+  };
+};
+
 import { Card, Button } from '../index';
 import { useAuthStore } from '../../store/authStore';
 import { colors, typography, spacing, borderRadius, shadows } from '../../theme';
@@ -66,10 +84,19 @@ export default function PremiumScreen() {
   const [isRestoring, setIsRestoring] = useState(false);
 
   useEffect(() => {
-    loadOfferings();
+    if (Platform.OS !== 'web') {
+      loadOfferings();
+    } else {
+      setIsLoading(false);
+    }
   }, []);
 
   const loadOfferings = async () => {
+    if (Platform.OS === 'web') {
+      setIsLoading(false);
+      return;
+    }
+    
     try {
       setIsLoading(true);
       // Lazy import to avoid loading during config evaluation
@@ -112,6 +139,11 @@ export default function PremiumScreen() {
   };
 
   const handlePurchase = async () => {
+    if (Platform.OS === 'web') {
+      Alert.alert('Not Available', 'In-app purchases are not available on web. Please use the mobile app.');
+      return;
+    }
+    
     if (!selectedPackage) {
       Alert.alert('Error', 'Please select a subscription plan.');
       return;
@@ -171,6 +203,11 @@ export default function PremiumScreen() {
   };
 
   const handleRestore = async () => {
+    if (Platform.OS === 'web') {
+      Alert.alert('Not Available', 'Restore purchases is not available on web. Please use the mobile app.');
+      return;
+    }
+    
     if (!user) {
       Alert.alert('Error', 'You must be logged in to restore purchases.');
       return;
