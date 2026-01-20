@@ -84,138 +84,115 @@ export default function AuthCallbackScreen() {
 
     const processCallback = async (url: string) => {
       // Parse the URL to extract tokens
-      // Supabase OAuth returns: chartsignl://auth/callback#access_token=...&refresh_token=...&expires_in=...
-      // or: chartsignl://auth/callback?access_token=...&refresh_token=...&expires_in=...
-      
-      let parsedUrl: URL;
-      try {
-        // Handle both hash (#) and query (?) parameters
-        if (url.includes('#')) {
-          const [baseUrl, hash] = url.split('#');
-          parsedUrl = new URL(`${baseUrl}?${hash}`);
-        } else {
-          parsedUrl = new URL(url);
-        }
-      } catch (e) {
-        // Fallback: use Linking.parse for React Native
-        const parsed = Linking.parse(url);
-        const accessToken = parsed.queryParams?.access_token as string;
-        const refreshToken = parsed.queryParams?.refresh_token as string;
+      // Supabase OAuth returns: .../auth/callback#access_token=...&refresh_token=... (web)
+      // or: chartsignl://auth/callback#access_token=... (mobile) or ?query (rare)
+      console.log('[OAuth] processCallback (fragment redacted):', url.replace(/#[^#]*$/, '#...'));
 
-        if (!accessToken) {
-          throw new Error('No access token found in callback URL');
-        }
+      let accessToken: string | null = null;
+      let refreshToken: string | null = null;
 
-        // Set session with tokens
-        const { error: sessionError } = await supabase.auth.setSession({
-          access_token: accessToken,
-          refresh_token: refreshToken || '',
-        });
-
-        if (sessionError) throw sessionError;
-
-        await handlePostAuth();
-        return;
+      // 1. Hash fragment (common for Supabase OAuth on web and mobile)
+      if (url.includes('#')) {
+        const hash = url.split('#')[1] || '';
+        const p = new URLSearchParams(hash);
+        accessToken = p.get('access_token');
+        refreshToken = p.get('refresh_token');
       }
 
-      // Extract tokens from URL
-      const accessToken = parsedUrl.searchParams.get('access_token') || parsedUrl.hash.match(/access_token=([^&]+)/)?.[1];
-      const refreshToken = parsedUrl.searchParams.get('refresh_token') || parsedUrl.hash.match(/refresh_token=([^&]+)/)?.[1];
+      // 2. Query string or URL object (?access_token=... or custom schemes)
+      if (!accessToken) {
+        try {
+          const u = new URL(url);
+          accessToken = u.searchParams.get('access_token');
+          refreshToken = refreshToken || u.searchParams.get('refresh_token');
+        } catch {
+          const parsed = Linking.parse(url);
+          accessToken = (parsed.queryParams?.access_token as string) || null;
+          refreshToken = refreshToken || (parsed.queryParams?.refresh_token as string) || null;
+        }
+      }
 
       if (!accessToken) {
         throw new Error('No access token found in callback URL');
       }
 
-      // Set session with tokens
       const { error: sessionError, data: sessionData } = await supabase.auth.setSession({
         access_token: accessToken,
         refresh_token: refreshToken || '',
       });
 
       if (sessionError) throw sessionError;
-
-      if (!sessionData.session) {
-        throw new Error('Failed to create session');
-      }
+      if (!sessionData.session) throw new Error('Failed to create session');
 
       await handlePostAuth();
     };
     
     const handleCallback = async () => {
       try {
-        // Get the full URL from params or Linking
-        // Supabase returns hash fragments (#access_token=...&refresh_token=...)
-        // or query parameters (?access_token=...&refresh_token=...)
+        // On web: prioritize window.location (hash or query) - most reliable after redirect
+        if (typeof window !== 'undefined') {
+          const hasHashTokens = window.location.hash?.includes('access_token');
+          const hasQueryTokens = window.location.search?.includes('access_token');
+          if (hasHashTokens || hasQueryTokens) {
+            const url = window.location.href;
+            console.log('[OAuth] Processing callback from window.location (web)');
+            await processCallback(url);
+            return;
+          }
+        }
+
+        // Get the full URL from params or Linking (mobile / deep links)
         let url = params.url as string;
-        
-        // Try to get URL from query params first
+
+        // Check if tokens are in params directly (e.g. from some routers)
         if (!url && Object.keys(params).length > 0) {
-          // Check if tokens are in params directly
           const accessToken = params.access_token as string;
           const refreshToken = params.refresh_token as string;
-          
+
           if (accessToken) {
-            // Tokens are in params directly, use them
+            console.log('[OAuth] Using tokens from params');
             const { error: sessionError } = await supabase.auth.setSession({
               access_token: accessToken,
               refresh_token: refreshToken || '',
             });
-            
+
             if (sessionError) throw sessionError;
             await handlePostAuth();
             return;
           }
         }
-        
-        // If no URL in params, try to get from Linking
+
+        // Try Linking.getInitialURL (mobile cold start from deep link)
         if (!url) {
           const initialUrl = await Linking.getInitialURL();
           if (initialUrl && initialUrl.includes('auth/callback')) {
             url = initialUrl;
+            console.log('[OAuth] Using URL from Linking.getInitialURL');
           }
         }
-        
-        // Listen for deep link events in case we missed the initial URL
+
+        // Listen for deep link events (mobile, in case we missed the initial URL)
         subscription = Linking.addEventListener('url', (event) => {
           if (event.url.includes('auth/callback')) {
-            processCallback(event.url).catch((error) => {
-              console.error('Callback processing error:', error);
+            processCallback(event.url).catch((err) => {
+              console.error('[OAuth] Callback processing error:', err);
               setStatus('error');
-              setErrorMessage(error instanceof Error ? error.message : 'Authentication failed');
+              setErrorMessage(err instanceof Error ? err.message : 'Authentication failed');
             });
           }
         });
-        
+
         if (url && url.includes('auth/callback')) {
           await processCallback(url);
         } else {
-          // If still no URL, try parsing from hash fragments in window.location (web fallback)
-          if (typeof window !== 'undefined' && window.location?.hash) {
-            const hash = window.location.hash.substring(1); // Remove #
-            const urlParams = new URLSearchParams(hash);
-            const accessToken = urlParams.get('access_token');
-            const refreshToken = urlParams.get('refresh_token');
-            
-            if (accessToken) {
-              const { error: sessionError } = await supabase.auth.setSession({
-                access_token: accessToken,
-                refresh_token: refreshToken || '',
-              });
-              
-              if (sessionError) throw sessionError;
-              await handlePostAuth();
-              return;
-            }
-          }
-          
           throw new Error('No callback URL found. Please try signing in again.');
         }
       } catch (error) {
-        console.error('OAuth callback error:', error);
+        console.error('[OAuth] Callback error:', error);
         setStatus('error');
         setErrorMessage(
-          error instanceof Error 
-            ? error.message 
+          error instanceof Error
+            ? error.message
             : 'Authentication failed. Please try again.'
         );
       }

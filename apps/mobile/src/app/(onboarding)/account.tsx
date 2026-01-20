@@ -148,6 +148,10 @@ export default function AccountScreen() {
         options: {
           redirectTo: redirectUrl,
           skipBrowserRedirect: false,
+          // Force Google to show account picker instead of auto-sign-in with existing session
+          ...(provider === 'google' && {
+            queryParams: { prompt: 'select_account' },
+          }),
         },
       });
 
@@ -156,19 +160,30 @@ export default function AccountScreen() {
       // If we get a URL back, open it in the browser
       // The browser will redirect back to our app with the tokens
       if (data?.url) {
-        const result = await WebBrowser.openAuthSessionAsync(
-          data.url,
-          redirectUrl
-        );
+        if (Platform.OS === 'web') {
+          // On web, use direct window redirect - WebBrowser.openAuthSessionAsync doesn't work
+          if (typeof window !== 'undefined') {
+            window.location.href = data.url;
+          } else {
+            throw new Error('Window not available for OAuth redirect');
+          }
+          // Don't reset isLoading - page is navigating away
+        } else {
+          // On mobile, use in-app browser
+          const result = await WebBrowser.openAuthSessionAsync(
+            data.url,
+            redirectUrl
+          );
 
-        // Handle the result - if user cancels, reset loading state
-        if (result.type === 'cancel') {
-          setIsLoading(false);
-          return;
+          // Handle the result - if user cancels, reset loading state
+          if (result.type === 'cancel') {
+            setIsLoading(false);
+            return;
+          }
+
+          // The callback handler will process the result
+          // We don't need to do anything else here
         }
-
-        // The callback handler will process the result
-        // We don't need to do anything else here
       }
     } catch (err) {
       let errorMessage = 'Authentication failed';
