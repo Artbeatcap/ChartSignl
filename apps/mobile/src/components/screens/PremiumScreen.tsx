@@ -8,6 +8,7 @@ import {
   Alert,
   ActivityIndicator,
   Linking,
+  TouchableOpacity,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -61,7 +62,6 @@ export default function PremiumScreen() {
   const { refreshSubscription, user } = useAuthStore();
   const [isLoading, setIsLoading] = useState(false);
   const [isPurchasing, setIsPurchasing] = useState(false);
-  const [isRestoring, setIsRestoring] = useState(false);
 
   useEffect(() => {
     // On web, we don't need to load offerings (Stripe handles pricing)
@@ -139,53 +139,6 @@ export default function PremiumScreen() {
     }
   };
 
-  const handleRestore = async () => {
-    if (Platform.OS === 'web') {
-      Alert.alert(
-        'Not Available',
-        'Restore purchases is not available on web. Your subscription status is automatically synced from your account.',
-        [{ text: 'OK' }]
-      );
-      return;
-    }
-    
-    if (!user) {
-      Alert.alert('Error', 'You must be logged in to restore purchases.');
-      return;
-    }
-
-    try {
-      setIsRestoring(true);
-      
-      await subscriptionService.restorePurchases(user.id);
-      await refreshSubscription();
-      
-      Alert.alert(
-        'Purchases Restored',
-        'Your premium subscription has been restored successfully!',
-        [{ text: 'OK', onPress: () => router.back() }]
-      );
-    } catch (error: any) {
-      console.error('Restore error:', error);
-      
-      if (error.message?.includes('No active subscriptions')) {
-        Alert.alert(
-          'No Purchases Found',
-          'We couldn\'t find any active subscriptions to restore.',
-          [{ text: 'OK' }]
-        );
-      } else {
-        Alert.alert(
-          'Restore Failed',
-          error.message || 'Failed to restore purchases. Please try again.',
-          [{ text: 'OK' }]
-        );
-      }
-    } finally {
-      setIsRestoring(false);
-    }
-  };
-
   if (isLoading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -199,6 +152,16 @@ export default function PremiumScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <View style={styles.topBar}>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={styles.backButton}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Ionicons name="chevron-back" size={24} color={colors.neutral[700]} />
+          <Text style={styles.backButtonText}>Back to Settings</Text>
+        </TouchableOpacity>
+      </View>
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
@@ -273,17 +236,6 @@ export default function PremiumScreen() {
           style={styles.purchaseButton}
         />
 
-        {/* Restore Button */}
-        <Button
-          title={isRestoring ? 'Restoring...' : 'Restore Purchases'}
-          onPress={handleRestore}
-          disabled={isRestoring}
-          loading={isRestoring}
-          variant="ghost"
-          fullWidth
-          style={styles.restoreButton}
-        />
-
         {/* Terms */}
         <View style={styles.termsContainer}>
           <Text style={styles.termsText}>
@@ -300,6 +252,23 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.neutral[100],
+  },
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  backButtonText: {
+    ...typography.bodyMd,
+    color: colors.neutral[700],
   },
   scrollView: {
     flex: 1,
@@ -409,9 +378,6 @@ const styles = StyleSheet.create({
   },
   purchaseButton: {
     marginBottom: spacing.md,
-  },
-  restoreButton: {
-    marginBottom: spacing.lg,
   },
   termsContainer: {
     paddingHorizontal: spacing.md,

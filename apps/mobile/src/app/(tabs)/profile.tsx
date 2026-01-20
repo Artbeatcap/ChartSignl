@@ -12,7 +12,7 @@ import { useEffect } from 'react';
 export default function ProfileScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { user, signOut, isPremium, checkSubscriptionStatus, isEmailVerified } = useAuthStore();
+  const { user, signOut, isPremium, checkSubscriptionStatus, isEmailVerified, refreshSubscription } = useAuthStore();
 
   const { data: profileData } = useQuery({
     queryKey: ['profile'],
@@ -95,6 +95,40 @@ export default function ProfileScreen() {
 
   const handlePrivacy = () => {
     router.push('/(settings)/privacy');
+  };
+
+  const handleRestorePurchases = async () => {
+    try {
+      const Purchases = (await import('react-native-purchases')).default;
+
+      if (user?.id) {
+        await Purchases.logIn(user.id);
+      }
+
+      const customerInfo = await Purchases.restorePurchases();
+
+      if (customerInfo.entitlements.active['premium']) {
+        await refreshSubscription();
+        Alert.alert(
+          'Success',
+          'Your premium subscription has been restored!',
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert(
+          'No Purchases Found',
+          'We couldn\'t find any active subscriptions to restore.',
+          [{ text: 'OK' }]
+        );
+      }
+    } catch (error: any) {
+      console.error('Restore error:', error);
+      Alert.alert(
+        'Restore Failed',
+        'Unable to restore purchases. Please try again.',
+        [{ text: 'OK' }]
+      );
+    }
   };
 
   return (
@@ -235,6 +269,11 @@ export default function ProfileScreen() {
           
           <TouchableOpacity style={styles.settingsItem} onPress={handlePrivacy}>
             <Text style={styles.settingsItemText}>Privacy Policy</Text>
+            <Text style={styles.settingsArrow}>→</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity style={styles.settingsItem} onPress={handleRestorePurchases}>
+            <Text style={styles.settingsItemText}>Restore Purchases</Text>
             <Text style={styles.settingsArrow}>→</Text>
           </TouchableOpacity>
         </Card>
