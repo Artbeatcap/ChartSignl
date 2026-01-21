@@ -24,7 +24,7 @@ A cross-platform app (iOS, Android, Web) that lets you search stocks/crypto, vie
 - **State**: Zustand + TanStack Query
 - **Backend**: Node.js + Hono
 - **Database/Auth/Storage**: Supabase
-- **Market Data**: Polygon.io (reliable, professional-grade data)
+- **Market Data**: Massive.com (reliable, professional-grade data)
 - **AI**: OpenAI API (GPT-4o-mini for data analysis)
 - **Monorepo**: Turborepo
 
@@ -82,7 +82,8 @@ npm install
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 OPENAI_API_KEY=sk-your-openai-key
-POLYGON_API_KEY=your-polygon-api-key
+MASSIVE_API_KEY=your-massive-api-key
+MASSIVE_BASE_URL=https://api.massive.com
 PORT=4000
 CORS_ORIGINS=https://app.chartsignl.com,http://localhost:8081,http://localhost:19006,http://localhost:3000
 ```

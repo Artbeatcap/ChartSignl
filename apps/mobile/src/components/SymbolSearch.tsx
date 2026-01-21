@@ -56,7 +56,7 @@ export function SymbolSearch({
   const [isSearching, setIsSearching] = useState(false);
   const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout | null>(null);
 
-  // Search using our backend (which uses Polygon.io)
+  // Search using our backend (which uses Massive.com)
   const searchSymbols = useCallback(async (searchQuery: string) => {
     if (!searchQuery.trim() || searchQuery.length < 1) {
       setResults([]);

@@ -3,12 +3,12 @@ import type { MarketDataPoint } from '@chartsignl/core';
 
 const marketDataRoute = new Hono();
 
-// Polygon.io configuration
-const POLYGON_API_KEY = process.env.POLYGON_API_KEY || '';
-const POLYGON_BASE_URL = 'https://api.polygon.io';
+// Massive.com configuration (Polygon-compatible API surface)
+const MASSIVE_API_KEY = process.env.MASSIVE_API_KEY || '';
+const MASSIVE_BASE_URL = process.env.MASSIVE_BASE_URL || 'https://api.massive.com';
 
-// Interval mapping for Polygon.io
-// Polygon uses: minute, hour, day, week, month, quarter, year
+// Interval mapping for Massive.com (Polygon-compatible)
+// Timespans: minute, hour, day, week, month, quarter, year
 // With multipliers like 1, 5, 15 for minutes
 // emaWarmup: extra bars to fetch for EMA calculation (21 EMA needs 21 bars to start)
 const intervalConfig: Record<string, { timespan: string; multiplier: number; daysBack: number; emaWarmup: number }> = {
@@ -22,7 +22,7 @@ const intervalConfig: Record<string, { timespan: string; multiplier: number; day
   '5y': { timespan: 'week', multiplier: 1, daysBack: 1825, emaWarmup: 30 },
 };
 
-// Format date as YYYY-MM-DD for Polygon
+// Format date as YYYY-MM-DD (kept for compatibility / future use)
 function formatDate(date: Date): string {
   return date.toISOString().split('T')[0];
 }
@@ -33,8 +33,8 @@ marketDataRoute.get('/:symbol', async (c) => {
     const symbol = c.req.param('symbol').toUpperCase();
     const chartInterval = c.req.query('interval') || '3mo';
 
-    if (!POLYGON_API_KEY) {
-      return c.json({ error: 'Polygon API key not configured' }, 500);
+    if (!MASSIVE_API_KEY) {
+      return c.json({ error: 'Massive API key not configured' }, 500);
     }
 
     const config = intervalConfig[chartInterval] || intervalConfig['3mo'];
@@ -54,17 +54,17 @@ marketDataRoute.get('/:symbol', async (c) => {
     // Fetch extra days/bars for EMA warmup calculation and weekend buffer
     startDate.setDate(startDate.getDate() - config.daysBack - config.emaWarmup - dateBuffer);
 
-    // Build Polygon URL
+    // Build Massive URL (Polygon-compatible path)
     // Format: /v2/aggs/ticker/{ticker}/range/{multiplier}/{timespan}/{from}/{to}
     const fromParam = startDate.getTime();
     const toParam = endDate.getTime();
-    const url = `${POLYGON_BASE_URL}/v2/aggs/ticker/${encodeURIComponent(symbol)}/range/${config.multiplier}/${config.timespan}/${fromParam}/${toParam}?adjusted=true&sort=asc&limit=5000&apiKey=${POLYGON_API_KEY}`;
+    const url = `${MASSIVE_BASE_URL}/v2/aggs/ticker/${encodeURIComponent(symbol)}/range/${config.multiplier}/${config.timespan}/${fromParam}/${toParam}?adjusted=true&sort=asc&limit=5000&apiKey=${MASSIVE_API_KEY}`;
 
     const response = await fetch(url);
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      console.error('Polygon API error:', response.status, errorData);
+      console.error('Massive API error:', response.status, errorData);
       
       if (response.status === 403) {
         return c.json({ error: 'API rate limit exceeded. Please try again later.' }, 429);
@@ -85,8 +85,8 @@ marketDataRoute.get('/:symbol', async (c) => {
       return c.json({ error: 'No data available for this symbol' }, 404);
     }
 
-    // Transform Polygon data to our format
-    // Polygon returns: t (timestamp), o (open), h (high), l (low), c (close), v (volume), vw (vwap), n (transactions)
+    // Transform Massive data to our format
+    // Massive returns: t (timestamp), o (open), h (high), l (low), c (close), v (volume), vw (vwap), n (transactions)
     const data: MarketDataPoint[] = json.results.map((bar: any) => ({
       timestamp: bar.t, // Already in milliseconds
       date: new Date(bar.t).toISOString(),
@@ -126,12 +126,12 @@ marketDataRoute.get('/:symbol/quote', async (c) => {
   try {
     const symbol = c.req.param('symbol').toUpperCase();
 
-    if (!POLYGON_API_KEY) {
-      return c.json({ error: 'Polygon API key not configured' }, 500);
+    if (!MASSIVE_API_KEY) {
+      return c.json({ error: 'Massive API key not configured' }, 500);
     }
 
     // Get previous day's close for reference
-    const url = `${POLYGON_BASE_URL}/v2/aggs/ticker/${encodeURIComponent(symbol)}/prev?adjusted=true&apiKey=${POLYGON_API_KEY}`;
+    const url = `${MASSIVE_BASE_URL}/v2/aggs/ticker/${encodeURIComponent(symbol)}/prev?adjusted=true&apiKey=${MASSIVE_API_KEY}`;
 
     const response = await fetch(url);
 
@@ -171,12 +171,12 @@ marketDataRoute.get('/search/:query', async (c) => {
   try {
     const query = c.req.param('query');
 
-    if (!POLYGON_API_KEY) {
-      return c.json({ error: 'Polygon API key not configured' }, 500);
+    if (!MASSIVE_API_KEY) {
+      return c.json({ error: 'Massive API key not configured' }, 500);
     }
 
     // Filter for stocks market only and limit to 50 results for better filtering
-    const url = `${POLYGON_BASE_URL}/v3/reference/tickers?search=${encodeURIComponent(query)}&market=stocks&active=true&limit=50&apiKey=${POLYGON_API_KEY}`;
+    const url = `${MASSIVE_BASE_URL}/v3/reference/tickers?search=${encodeURIComponent(query)}&market=stocks&active=true&limit=50&apiKey=${MASSIVE_API_KEY}`;
 
     const response = await fetch(url);
 

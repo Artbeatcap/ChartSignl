@@ -20,7 +20,7 @@ interface FetchMarketDataResult {
   emaWarmupBars: number;
 }
 
-// Fetch market data from our backend (which proxies to Polygon.io)
+// Fetch market data from our backend (which proxies to Massive.com)
 // Now returns warmup metadata for EMA calculation
 export async function fetchMarketData(
   symbol: string,

@@ -132,7 +132,7 @@ export default function PrivacyScreen() {
         <Text style={styles.sectionTitle}>7. Third-Party Services</Text>
         <Text style={styles.paragraph}>
           Our app may integrate with third-party services for authentication (Supabase), market
-          data (Polygon.io), and analytics. These services have their own privacy policies, and
+          data (Massive.com), and analytics. These services have their own privacy policies, and
           we encourage you to review them.
         </Text>
 
