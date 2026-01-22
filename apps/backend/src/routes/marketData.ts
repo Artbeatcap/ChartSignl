@@ -22,11 +22,6 @@ const intervalConfig: Record<string, { timespan: string; multiplier: number; day
   '5y': { timespan: 'week', multiplier: 1, daysBack: 1825, emaWarmup: 30 },
 };
 
-// Format date as YYYY-MM-DD (kept for compatibility / future use)
-function formatDate(date: Date): string {
-  return date.toISOString().split('T')[0];
-}
-
 // GET /api/market-data/:symbol
 marketDataRoute.get('/:symbol', async (c) => {
   try {

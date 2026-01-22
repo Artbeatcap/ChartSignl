@@ -14,6 +14,7 @@ build/
 .env
 .env.local
 .env.*.local
+remote.env
 
 # IDE
 .idea/

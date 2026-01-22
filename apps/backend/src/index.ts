@@ -29,11 +29,8 @@ import subscriptionRoute from './routes/subscription.js';
 
 const app = new Hono();
 
-// Middleware
-app.use('*', logger());
-
-// CORS configuration
-const corsOrigins = process.env.CORS_ORIGINS?.split(',') || [
+// CORS configuration - must be applied early to handle preflight requests
+const corsOrigins = process.env.CORS_ORIGINS?.split(',').map(o => o.trim()) || [
   'http://localhost:8081',
   'http://localhost:19006',
   'http://localhost:3000',
@@ -41,12 +38,24 @@ const corsOrigins = process.env.CORS_ORIGINS?.split(',') || [
   'https://chartsignl.com',
 ];
 
+// Apply CORS middleware first to ensure preflight requests are handled
+// Using function-based origin checking for better flexibility
 app.use('*', cors({
-  origin: corsOrigins,
+  origin: (origin) => {
+    // Allow requests with no origin (e.g., mobile apps, Postman)
+    if (!origin) return true;
+    // Check if origin is in allowed list
+    return corsOrigins.includes(origin);
+  },
   credentials: true,
-  allowHeaders: ['Content-Type', 'Authorization'],
-  allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowHeaders: ['Content-Type', 'Authorization', 'Origin', 'X-Requested-With'],
+  allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  exposeHeaders: ['Content-Length', 'Content-Type'],
+  maxAge: 86400, // Cache preflight requests for 24 hours
 }));
+
+// Middleware
+app.use('*', logger());
 
 // Health check
 app.get('/health', (c) => {

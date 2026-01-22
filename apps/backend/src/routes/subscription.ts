@@ -17,7 +17,8 @@ if (!stripeSecretKey) {
 }
 
 const stripe = stripeSecretKey && stripeSecretKey.startsWith('sk_') ? new Stripe(stripeSecretKey, {
-  apiVersion: '2024-06-20',
+  // Keep in sync with installed Stripe typings
+  apiVersion: '2025-12-15.clover',
 }) : null;
 
 // GET /api/subscription/status - Get subscription status
@@ -41,10 +42,18 @@ subscriptionRoute.get('/status', async (c) => {
       }, 401);
     }
 
+    type SubscriptionRow = {
+      status: string | null;
+      platform: string | null;
+      expires_at?: string | null;
+      current_period_end?: string | null;
+      current_period_start?: string | null;
+    };
+
     // Query Supabase subscriptions table
     // Try to select new columns first, fallback to old schema if migration not run
-    let subscription;
-    let error;
+    let subscription: SubscriptionRow | null = null;
+    let error: any;
     
     try {
       const result = await supabaseAdmin
@@ -52,7 +61,7 @@ subscriptionRoute.get('/status', async (c) => {
         .select('status, platform, current_period_end, expires_at')
         .eq('user_id', userId)
         .maybeSingle();
-      subscription = result.data;
+      subscription = result.data as SubscriptionRow | null;
       error = result.error;
     } catch (err: any) {
       // If new columns don't exist, try with old schema
@@ -63,7 +72,7 @@ subscriptionRoute.get('/status', async (c) => {
           .select('status, platform, expires_at')
           .eq('user_id', userId)
           .maybeSingle();
-        subscription = result.data;
+        subscription = result.data as SubscriptionRow | null;
         error = result.error;
       } else {
         throw err;
@@ -268,7 +277,8 @@ subscriptionRoute.post('/webhook', async (c) => {
         }
 
         // Get subscription details from Stripe
-        const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+        const subscription = await stripe.subscriptions.retrieve(subscriptionId) as unknown as Stripe.Subscription;
+        const subscriptionItem = subscription.items?.data?.[0];
 
         // Insert/update subscription in Supabase
         const { error: upsertError } = await supabaseAdmin
@@ -279,8 +289,12 @@ subscriptionRoute.post('/webhook', async (c) => {
             stripe_customer_id: customerId || null,
             status: subscription.status === 'active' ? 'active' : 'cancelled',
             platform: 'web',
-            current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
-            current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+            current_period_start: subscriptionItem?.current_period_start
+              ? new Date(subscriptionItem.current_period_start * 1000).toISOString()
+              : null,
+            current_period_end: subscriptionItem?.current_period_end
+              ? new Date(subscriptionItem.current_period_end * 1000).toISOString()
+              : null,
             updated_at: new Date().toISOString(),
           }, { onConflict: 'user_id' });
 
@@ -294,6 +308,7 @@ subscriptionRoute.post('/webhook', async (c) => {
 
       case 'customer.subscription.updated': {
         const subscription = event.data.object as Stripe.Subscription;
+        const subscriptionItem = subscription.items?.data?.[0];
         const customerId = typeof subscription.customer === 'string'
           ? subscription.customer
           : subscription.customer?.id;
@@ -321,8 +336,12 @@ subscriptionRoute.post('/webhook', async (c) => {
           .from('subscriptions')
           .update({
             status,
-            current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
-            current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+            current_period_start: subscriptionItem?.current_period_start
+              ? new Date(subscriptionItem.current_period_start * 1000).toISOString()
+              : null,
+            current_period_end: subscriptionItem?.current_period_end
+              ? new Date(subscriptionItem.current_period_end * 1000).toISOString()
+              : null,
             updated_at: new Date().toISOString(),
           })
           .eq('stripe_subscription_id', subscription.id);
