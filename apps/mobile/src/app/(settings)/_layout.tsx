@@ -14,6 +14,7 @@ export default function SettingsLayout() {
       <Stack.Screen name="edit-profile" />
       <Stack.Screen name="notifications" />
       <Stack.Screen name="help" />
+      <Stack.Screen name="terms" />
       <Stack.Screen name="privacy" />
     </Stack>
   );

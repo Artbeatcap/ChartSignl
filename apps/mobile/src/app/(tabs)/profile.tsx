@@ -97,6 +97,10 @@ export default function ProfileScreen() {
     router.push('/(settings)/privacy');
   };
 
+  const handleTerms = () => {
+    router.push('/(settings)/terms');
+  };
+
   const handleRestorePurchases = async () => {
     try {
       const Purchases = (await import('react-native-purchases')).default;
@@ -264,6 +268,11 @@ export default function ProfileScreen() {
           
           <TouchableOpacity style={styles.settingsItem} onPress={handleHelp}>
             <Text style={styles.settingsItemText}>Help & Support</Text>
+            <Text style={styles.settingsArrow}>→</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity style={styles.settingsItem} onPress={handleTerms}>
+            <Text style={styles.settingsItemText}>Terms of Service</Text>
             <Text style={styles.settingsArrow}>→</Text>
           </TouchableOpacity>
           

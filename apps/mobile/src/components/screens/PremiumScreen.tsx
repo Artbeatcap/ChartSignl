@@ -139,6 +139,14 @@ export default function PremiumScreen() {
     }
   };
 
+  const handleTermsPress = () => {
+    router.push('/(settings)/terms');
+  };
+
+  const handlePrivacyPress = () => {
+    router.push('/(settings)/privacy');
+  };
+
   if (isLoading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -236,11 +244,18 @@ export default function PremiumScreen() {
           style={styles.purchaseButton}
         />
 
-        {/* Terms */}
+        {/* Terms - Now with clickable links */}
         <View style={styles.termsContainer}>
           <Text style={styles.termsText}>
-            By continuing, you agree to our Terms of Service and Privacy Policy.
-            Subscription will auto-renew unless cancelled at least 24 hours before the end of the current period.
+            By continuing, you agree to our{' '}
+            <Text style={styles.termsLink} onPress={handleTermsPress}>
+              Terms of Service
+            </Text>
+            {' '}and{' '}
+            <Text style={styles.termsLink} onPress={handlePrivacyPress}>
+              Privacy Policy
+            </Text>
+            . Subscription will auto-renew unless cancelled at least 24 hours before the end of the current period.
           </Text>
         </View>
       </ScrollView>
@@ -387,6 +402,10 @@ const styles = StyleSheet.create({
     color: colors.neutral[400],
     textAlign: 'center',
     lineHeight: 20,
+  },
+  termsLink: {
+    color: colors.primary[600],
+    textDecorationLine: 'underline',
   },
 });
 
