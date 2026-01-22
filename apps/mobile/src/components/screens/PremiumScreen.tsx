@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Platform,
   Linking,
+  TouchableOpacity,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -270,9 +271,25 @@ export default function PremiumScreen() {
     }
   };
 
+  const handleTermsPress = () => {
+    router.push('/(settings)/terms');
+  };
+
+  const handlePrivacyPress = () => {
+    router.push('/(settings)/privacy');
+  };
+
   if (isLoading) {
     return (
       <SafeAreaView style={styles.container}>
+        {/* Navigation Header */}
+        <View style={styles.navHeader}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <Text style={styles.backText}>← Back</Text>
+          </TouchableOpacity>
+          <Text style={styles.navHeaderTitle}>Premium</Text>
+          <View style={styles.placeholder} />
+        </View>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary[500]} />
           <Text style={styles.loadingText}>Loading subscription plans...</Text>
@@ -283,6 +300,15 @@ export default function PremiumScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Navigation Header */}
+      <View style={styles.navHeader}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <Text style={styles.backText}>← Back</Text>
+        </TouchableOpacity>
+        <Text style={styles.navHeaderTitle}>Premium</Text>
+        <View style={styles.placeholder} />
+      </View>
+
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
@@ -378,8 +404,15 @@ export default function PremiumScreen() {
         {/* Terms */}
         <View style={styles.termsContainer}>
           <Text style={styles.termsText}>
-            By continuing, you agree to our Terms of Service and Privacy Policy.
-            Subscription will auto-renew unless cancelled at least 24 hours before the end of the current period.
+            By continuing, you agree to our{' '}
+            <Text style={styles.termsLink} onPress={handleTermsPress}>
+              Terms of Service
+            </Text>
+            {' '}and{' '}
+            <Text style={styles.termsLink} onPress={handlePrivacyPress}>
+              Privacy Policy
+            </Text>
+            . Subscription will auto-renew unless cancelled at least 24 hours before the end of the current period.
           </Text>
         </View>
       </ScrollView>
@@ -391,6 +424,30 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  // Navigation Header
+  navHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.neutral[100],
+  },
+  backButton: {
+    minWidth: 60,
+  },
+  backText: {
+    ...typography.bodyMd,
+    color: colors.primary[600],
+  },
+  navHeaderTitle: {
+    ...typography.headingMd,
+    color: colors.neutral[900],
+  },
+  placeholder: {
+    minWidth: 60,
   },
   scrollView: {
     flex: 1,
@@ -512,6 +569,10 @@ const styles = StyleSheet.create({
     color: colors.neutral[400],
     textAlign: 'center',
     lineHeight: 20,
+  },
+  termsLink: {
+    color: colors.primary[600],
+    textDecorationLine: 'underline',
   },
 });
 
