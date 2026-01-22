@@ -41,11 +41,17 @@ const corsOrigins = process.env.CORS_ORIGINS?.split(',').map(o => o.trim()) || [
 // Apply CORS middleware first to ensure preflight requests are handled
 // Using function-based origin checking for better flexibility
 app.use('*', cors({
-  origin: (origin) => {
+  origin: (origin: string): string => {
     // Allow requests with no origin (e.g., mobile apps, Postman)
-    if (!origin) return true;
+    if (!origin) {
+      return '*'; // Allow all origins when no origin is provided
+    }
     // Check if origin is in allowed list
-    return corsOrigins.includes(origin);
+    if (corsOrigins.includes(origin)) {
+      return origin;
+    }
+    // Return first allowed origin as fallback
+    return corsOrigins[0] || '*';
   },
   credentials: true,
   allowHeaders: ['Content-Type', 'Authorization', 'Origin', 'X-Requested-With'],
