@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Alert, Platform } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Alert, Platform, Linking } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,7 +12,7 @@ import { useEffect } from 'react';
 export default function ProfileScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { user, signOut, isPremium, checkSubscriptionStatus, isEmailVerified } = useAuthStore();
+  const { user, signOut, isPremium, checkSubscriptionStatus, isEmailVerified, refreshSubscription } = useAuthStore();
 
   const { data: profileData } = useQuery({
     queryKey: ['profile'],
@@ -26,6 +26,11 @@ export default function ProfileScreen() {
 
   const profile = profileData?.user;
   const usage = usageData;
+  
+  // Calculate remaining analyses for display
+  const remainingAnalyses = usage?.isPro 
+    ? Infinity 
+    : (usage?.freeAnalysesLimit || FREE_ANALYSIS_LIMIT) - (usage?.freeAnalysesUsed || 0);
 
   useEffect(() => {
     // Check subscription status on mount
@@ -36,6 +41,29 @@ export default function ProfileScreen() {
 
   const handleUpgrade = () => {
     router.push('/premium');
+  };
+
+  const handleManageSubscription = async () => {
+    try {
+      if (Platform.OS === 'ios') {
+        await Linking.openURL('https://apps.apple.com/account/subscriptions');
+      } else if (Platform.OS === 'android') {
+        await Linking.openURL('https://play.google.com/store/account/subscriptions');
+      } else {
+        Alert.alert(
+          'Manage Subscription',
+          'Please manage your subscription through the App Store or Google Play Store where you originally subscribed.',
+          [{ text: 'OK' }]
+        );
+      }
+    } catch (error) {
+      console.error('Error opening subscription management:', error);
+      Alert.alert(
+        'Error',
+        'Unable to open subscription management. Please go to your device\'s Settings > Subscriptions to manage your subscription.',
+        [{ text: 'OK' }]
+      );
+    }
   };
 
   const performSignOut = async () => {
@@ -101,6 +129,40 @@ export default function ProfileScreen() {
     router.push('/(settings)/terms');
   };
 
+  const handleRestorePurchases = async () => {
+    try {
+      const Purchases = (await import('react-native-purchases')).default;
+
+      if (user?.id) {
+        await Purchases.logIn(user.id);
+      }
+
+      const customerInfo = await Purchases.restorePurchases();
+
+      if (customerInfo.entitlements.active['premium']) {
+        await refreshSubscription();
+        Alert.alert(
+          'Success',
+          'Your premium subscription has been restored!',
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert(
+          'No Purchases Found',
+          'We couldn\'t find any active subscriptions to restore.',
+          [{ text: 'OK' }]
+        );
+      }
+    } catch (error: any) {
+      console.error('Restore error:', error);
+      Alert.alert(
+        'Restore Failed',
+        'Unable to restore purchases. Please try again.',
+        [{ text: 'OK' }]
+      );
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView
@@ -132,7 +194,7 @@ export default function ProfileScreen() {
               <View style={styles.upgradeTextContainer}>
                 <Text style={styles.upgradeTitle}>Upgrade to Premium</Text>
                 <Text style={styles.upgradeDescription}>
-                  Get unlimited analysis and advanced features
+                  Unlimited analysis for $4.99/month
                 </Text>
               </View>
             </View>
@@ -151,10 +213,18 @@ export default function ProfileScreen() {
                 <Ionicons name="star" size={20} color={colors.primary[500]} />
                 <Text style={styles.premiumBadgeText}>Premium</Text>
               </View>
-              <Text style={styles.premiumActiveText}>
-                Premium Active - You have access to all premium features
-              </Text>
+              <Text style={styles.premiumPriceText}>$4.99/month</Text>
             </View>
+            <Text style={styles.premiumActiveText}>
+              You have access to all premium features
+            </Text>
+            <TouchableOpacity 
+              style={styles.manageSubscriptionLink}
+              onPress={handleUpgrade}
+            >
+              <Text style={styles.manageSubscriptionText}>View Benefits & Manage Subscription</Text>
+              <Ionicons name="chevron-forward" size={16} color={colors.primary[500]} />
+            </TouchableOpacity>
           </Card>
         )}
 
@@ -174,25 +244,32 @@ export default function ProfileScreen() {
           <View style={styles.usageStats}>
             <View style={styles.usageStat}>
               <Text style={styles.usageNumber}>
-                {usage?.isPro ? '∞' : `${FREE_ANALYSIS_LIMIT - (usage?.freeAnalysesUsed || 0)}`}
+                {usage?.isPro ? '∞' : remainingAnalyses}
               </Text>
-              <Text style={styles.usageLabel}>Analyses left</Text>
+              <Text style={styles.usageLabel}>
+                {usage?.isPro ? 'Unlimited' : 'Analyses Left'}
+              </Text>
             </View>
             <View style={styles.usageDivider} />
             <View style={styles.usageStat}>
               <Text style={styles.usageNumber}>{usage?.freeAnalysesUsed || 0}</Text>
-              <Text style={styles.usageLabel}>Total used</Text>
+              <Text style={styles.usageLabel}>Total Analyses</Text>
             </View>
           </View>
 
           {!usage?.isPro && (
-            <View style={styles.progressBar}>
-              <View
-                style={[
-                  styles.progressFill,
-                  { width: `${((usage?.freeAnalysesUsed || 0) / FREE_ANALYSIS_LIMIT) * 100}%` },
-                ]}
-              />
+            <View style={styles.usageProgress}>
+              <View style={styles.usageProgressBar}>
+                <View
+                  style={[
+                    styles.usageProgressFill,
+                    { width: `${((usage?.freeAnalysesUsed || 0) / (usage?.freeAnalysesLimit || FREE_ANALYSIS_LIMIT)) * 100}%` },
+                  ]}
+                />
+              </View>
+              <Text style={styles.usageProgressText}>
+                {remainingAnalyses} of {usage?.freeAnalysesLimit || FREE_ANALYSIS_LIMIT} free analyses this week
+              </Text>
             </View>
           )}
         </Card>
@@ -218,43 +295,73 @@ export default function ProfileScreen() {
           </Card>
         )}
 
-        {/* Settings */}
+        {/* Settings Section */}
         <Card style={styles.settingsCard}>
-          <Text style={styles.cardTitle}>Settings</Text>
-          
+          <Text style={styles.settingsTitle}>Settings</Text>
+
           <TouchableOpacity style={styles.settingsItem} onPress={handleEditProfile}>
-            <Text style={styles.settingsItemText}>Edit Profile</Text>
-            <Text style={styles.settingsArrow}>→</Text>
+            <View style={styles.settingsItemLeft}>
+              <Ionicons name="person-outline" size={24} color={colors.neutral[600]} />
+              <Text style={styles.settingsItemText}>Edit Profile</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.neutral[400]} />
           </TouchableOpacity>
-          
+
           <TouchableOpacity style={styles.settingsItem} onPress={handleNotifications}>
-            <Text style={styles.settingsItemText}>Notifications</Text>
-            <Text style={styles.settingsArrow}>→</Text>
+            <View style={styles.settingsItemLeft}>
+              <Ionicons name="notifications-outline" size={24} color={colors.neutral[600]} />
+              <Text style={styles.settingsItemText}>Notifications</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.neutral[400]} />
           </TouchableOpacity>
-          
+
+          {/* Subscription Management - Only show for premium users */}
+          {isPremium && (
+            <TouchableOpacity style={styles.settingsItem} onPress={handleManageSubscription}>
+              <View style={styles.settingsItemLeft}>
+                <Ionicons name="card-outline" size={24} color={colors.neutral[600]} />
+                <Text style={styles.settingsItemText}>Manage Subscription</Text>
+              </View>
+              <Ionicons name="open-outline" size={20} color={colors.neutral[400]} />
+            </TouchableOpacity>
+          )}
+
           <TouchableOpacity style={styles.settingsItem} onPress={handleHelp}>
-            <Text style={styles.settingsItemText}>Help & Support</Text>
-            <Text style={styles.settingsArrow}>→</Text>
+            <View style={styles.settingsItemLeft}>
+              <Ionicons name="help-circle-outline" size={24} color={colors.neutral[600]} />
+              <Text style={styles.settingsItemText}>Help & FAQ</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.neutral[400]} />
           </TouchableOpacity>
-          
+
           <TouchableOpacity style={styles.settingsItem} onPress={handleTerms}>
-            <Text style={styles.settingsItemText}>Terms of Service</Text>
-            <Text style={styles.settingsArrow}>→</Text>
+            <View style={styles.settingsItemLeft}>
+              <Ionicons name="document-text-outline" size={24} color={colors.neutral[600]} />
+              <Text style={styles.settingsItemText}>Terms of Service</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.neutral[400]} />
           </TouchableOpacity>
-          
+
           <TouchableOpacity style={styles.settingsItem} onPress={handlePrivacy}>
-            <Text style={styles.settingsItemText}>Privacy Policy</Text>
-            <Text style={styles.settingsArrow}>→</Text>
+            <View style={styles.settingsItemLeft}>
+              <Ionicons name="shield-outline" size={24} color={colors.neutral[600]} />
+              <Text style={styles.settingsItemText}>Privacy Policy</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.neutral[400]} />
           </TouchableOpacity>
         </Card>
 
-        {/* Sign Out */}
-        <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
-          <Text style={styles.signOutText}>Sign Out</Text>
-        </TouchableOpacity>
+        {/* Sign Out Button */}
+        <Button
+          title="Sign Out"
+          onPress={handleSignOut}
+          variant="outline"
+          fullWidth
+          style={styles.signOutButton}
+        />
 
-        {/* App version */}
-        <Text style={styles.version}>ChartSignl v1.0.0</Text>
+        {/* App Version */}
+        <Text style={styles.versionText}>ChartSignl v1.0.0</Text>
       </ScrollView>
     </SafeAreaView>
   );
@@ -287,9 +394,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   avatarText: {
-    fontSize: 32,
+    ...typography.displayMd,
     color: colors.primary[600],
-    fontWeight: '600',
   },
   name: {
     ...typography.headingLg,
@@ -300,13 +406,10 @@ const styles = StyleSheet.create({
     ...typography.bodyMd,
     color: colors.neutral[500],
   },
-  // Upgrade card
+  // Upgrade Card
   upgradeCard: {
+    marginBottom: spacing.lg,
     backgroundColor: colors.primary[50],
-    borderWidth: 2,
-    borderColor: colors.primary[200],
-    marginBottom: spacing.md,
-    padding: spacing.lg,
   },
   upgradeContent: {
     flexDirection: 'row',
@@ -314,9 +417,9 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   upgradeIconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     backgroundColor: colors.primary[100],
     alignItems: 'center',
     justifyContent: 'center',
@@ -327,52 +430,68 @@ const styles = StyleSheet.create({
   },
   upgradeTitle: {
     ...typography.headingMd,
-    color: colors.primary[700],
+    color: colors.neutral[900],
     marginBottom: spacing.xs,
   },
   upgradeDescription: {
-    ...typography.bodyMd,
-    color: colors.primary[600],
+    ...typography.bodySm,
+    color: colors.neutral[600],
   },
   upgradeButton: {
     marginTop: spacing.sm,
   },
-  // Premium active card
+  // Premium Active Card
   premiumActiveCard: {
-    backgroundColor: colors.surface,
-    borderWidth: 2,
-    borderColor: colors.primary[300],
-    marginBottom: spacing.md,
-    padding: spacing.lg,
+    marginBottom: spacing.lg,
+    backgroundColor: colors.primary[50],
+    borderWidth: 1,
+    borderColor: colors.primary[200],
   },
   premiumActiveContent: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.sm,
   },
   premiumBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.primary[50],
-    paddingHorizontal: spacing.md,
+    backgroundColor: colors.primary[100],
+    paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
     borderRadius: borderRadius.full,
-    marginRight: spacing.md,
   },
   premiumBadgeText: {
     ...typography.labelMd,
-    color: colors.primary[600],
+    color: colors.primary[700],
     marginLeft: spacing.xs,
-    fontWeight: '600',
+  },
+  premiumPriceText: {
+    ...typography.headingSm,
+    color: colors.primary[600],
   },
   premiumActiveText: {
     ...typography.bodyMd,
-    color: colors.neutral[700],
-    flex: 1,
+    color: colors.neutral[600],
+    marginBottom: spacing.md,
+  },
+  manageSubscriptionLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.primary[200],
+  },
+  manageSubscriptionText: {
+    ...typography.labelMd,
+    color: colors.primary[500],
+    marginRight: spacing.xs,
   },
   // Usage card
+  // Usage Card
   usageCard: {
-    backgroundColor: colors.primary[50],
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,
   },
   usageHeader: {
     flexDirection: 'row',
@@ -381,12 +500,12 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   usageTitle: {
-    ...typography.headingSm,
-    color: colors.primary[700],
+    ...typography.headingMd,
+    color: colors.neutral[900],
   },
   upgradeLink: {
     ...typography.labelMd,
-    color: colors.primary[600],
+    color: colors.primary[500],
   },
   usageStats: {
     flexDirection: 'row',
@@ -399,7 +518,8 @@ const styles = StyleSheet.create({
   },
   usageNumber: {
     ...typography.displaySm,
-    color: colors.neutral[900],
+    color: colors.primary[600],
+    marginBottom: spacing.xs,
   },
   usageLabel: {
     ...typography.bodySm,
@@ -408,18 +528,28 @@ const styles = StyleSheet.create({
   usageDivider: {
     width: 1,
     height: 40,
-    backgroundColor: colors.primary[200],
+    backgroundColor: colors.neutral[200],
+    marginHorizontal: spacing.md,
   },
-  progressBar: {
-    height: 6,
-    backgroundColor: colors.primary[200],
-    borderRadius: 3,
+  usageProgress: {
+    marginTop: spacing.sm,
+  },
+  usageProgressBar: {
+    height: 8,
+    backgroundColor: colors.neutral[200],
+    borderRadius: borderRadius.full,
     overflow: 'hidden',
+    marginBottom: spacing.xs,
   },
-  progressFill: {
+  usageProgressFill: {
     height: '100%',
     backgroundColor: colors.primary[500],
-    borderRadius: 3,
+    borderRadius: borderRadius.full,
+  },
+  usageProgressText: {
+    ...typography.bodySm,
+    color: colors.neutral[500],
+    textAlign: 'center',
   },
   // Profile card
   profileCard: {
@@ -447,37 +577,36 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     textTransform: 'capitalize',
   },
-  // Settings
+  // Settings Card
   settingsCard: {
     marginBottom: spacing.lg,
   },
+  settingsTitle: {
+    ...typography.headingMd,
+    color: colors.neutral[900],
+    marginBottom: spacing.md,
+  },
   settingsItem: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingVertical: spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: colors.neutral[100],
   },
+  settingsItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   settingsItemText: {
     ...typography.bodyMd,
     color: colors.neutral[700],
+    marginLeft: spacing.md,
   },
-  settingsArrow: {
-    ...typography.bodyMd,
-    color: colors.neutral[400],
-  },
-  // Sign out
   signOutButton: {
-    alignItems: 'center',
-    paddingVertical: spacing.md,
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,
   },
-  signOutText: {
-    ...typography.labelLg,
-    color: colors.error,
-  },
-  version: {
+  versionText: {
     ...typography.bodySm,
     color: colors.neutral[400],
     textAlign: 'center',
