@@ -11,11 +11,12 @@ import {
   Linking,
   TouchableOpacity,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import type { PurchasesOffering, PurchasesPackage } from 'react-native-purchases';
 import { Card, Button } from '../index';
 import { useAuthStore } from '../../store/authStore';
+import { subscriptionService } from '../../services/subscription.service';
 import { colors, typography, spacing, borderRadius, shadows } from '../../theme';
 
 interface PremiumFeature {
@@ -98,6 +99,7 @@ const COMPARISON_DATA: ComparisonItem[] = [
 
 export default function PremiumScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ success?: string; canceled?: string }>();
   const { refreshSubscription, user, isPremium } = useAuthStore();
   const [offerings, setOfferings] = useState<PurchasesOffering | null>(null);
   const [selectedPackage, setSelectedPackage] = useState<PurchasesPackage | null>(null);
@@ -110,9 +112,42 @@ export default function PremiumScreen() {
     loadOfferings();
   }, []);
 
+  // Handle Stripe redirect query params
+  useEffect(() => {
+    if (params.success === 'true') {
+      // Refresh subscription status after successful payment
+      refreshSubscription().then(() => {
+        Alert.alert(
+          'Welcome to Premium! 🎉',
+          'Your subscription is now active. Enjoy unlimited access to all premium features!',
+          [{ text: 'Get Started', onPress: () => router.back() }]
+        );
+      });
+      // Clear the query param
+      router.replace('/premium');
+    } else if (params.canceled === 'true') {
+      Alert.alert(
+        'Checkout Canceled',
+        'Your subscription was not completed. You can try again anytime.',
+        [{ text: 'OK' }]
+      );
+      // Clear the query param
+      router.replace('/premium');
+    }
+  }, [params.success, params.canceled]);
+
   const loadOfferings = async () => {
     try {
       setIsLoading(true);
+      
+      // Skip RevenueCat entirely on web
+      if (Platform.OS === 'web') {
+        console.log('Web platform detected. Using Stripe checkout.');
+        setIsLoading(false);
+        return; // No RevenueCat on web
+      }
+      
+      // Only load RevenueCat on mobile
       const Purchases = (await import('react-native-purchases')).default;
       const offeringsData = await Purchases.getOfferings();
       
@@ -137,7 +172,7 @@ export default function PremiumScreen() {
       }
     } catch (error) {
       console.error('Error loading offerings:', error);
-      if (!isPremium) {
+      if (!isPremium && Platform.OS !== 'web') {
         Alert.alert(
           'Error',
           'Failed to load subscription plans. Please check your connection and try again.',
@@ -153,13 +188,38 @@ export default function PremiumScreen() {
   };
 
   const handlePurchase = async () => {
-    if (!selectedPackage) {
-      Alert.alert('Error', 'Please select a subscription plan.');
+    if (!user) {
+      Alert.alert('Error', 'You must be logged in to purchase a subscription.');
       return;
     }
 
-    if (!user) {
-      Alert.alert('Error', 'You must be logged in to purchase a subscription.');
+    // Web: Use Stripe checkout
+    if (Platform.OS === 'web') {
+      try {
+        setIsPurchasing(true);
+        const result = await subscriptionService.purchaseSubscription(undefined, user.id);
+        if (result.checkoutUrl) {
+          // Redirect to Stripe checkout
+          await Linking.openURL(result.checkoutUrl);
+        } else {
+          Alert.alert('Error', 'Failed to create checkout session. Please try again.');
+        }
+      } catch (error: any) {
+        console.error('Purchase error:', error);
+        Alert.alert(
+          'Purchase Failed',
+          error.message || 'An error occurred during purchase. Please try again.',
+          [{ text: 'OK' }]
+        );
+      } finally {
+        setIsPurchasing(false);
+      }
+      return;
+    }
+
+    // Mobile: Use RevenueCat
+    if (!selectedPackage) {
+      Alert.alert('Error', 'Please select a subscription plan.');
       return;
     }
 
@@ -198,6 +258,17 @@ export default function PremiumScreen() {
       return;
     }
 
+    // Web: Restore not applicable (subscriptions managed via Stripe)
+    if (Platform.OS === 'web') {
+      Alert.alert(
+        'Restore Purchases',
+        'Web subscriptions are managed through Stripe. Please use "Manage Subscription" to view your subscription status.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    // Mobile: Use RevenueCat
     try {
       setIsRestoring(true);
       const Purchases = (await import('react-native-purchases')).default;
@@ -238,8 +309,16 @@ export default function PremiumScreen() {
       } else if (Platform.OS === 'android') {
         // Open Google Play subscription management
         await Linking.openURL('https://play.google.com/store/account/subscriptions');
+      } else if (Platform.OS === 'web') {
+        // Web: Stripe subscriptions are managed via Stripe customer portal
+        // For now, show a message. Can add customer portal endpoint later if needed
+        Alert.alert(
+          'Manage Subscription',
+          'To manage your subscription, please contact support or check your email for subscription management links from Stripe.',
+          [{ text: 'OK' }]
+        );
       } else {
-        // Web fallback
+        // Fallback
         Alert.alert(
           'Manage Subscription',
           'Please manage your subscription through the App Store or Google Play Store where you originally subscribed.',
@@ -257,14 +336,25 @@ export default function PremiumScreen() {
   };
 
   const handleCancelSubscription = () => {
-    Alert.alert(
-      'Cancel Subscription',
-      'To cancel your subscription, you\'ll need to manage it through the App Store or Google Play Store. Would you like to open subscription settings?',
-      [
-        { text: 'Not Now', style: 'cancel' },
-        { text: 'Open Settings', onPress: handleManageSubscription },
-      ]
-    );
+    if (Platform.OS === 'web') {
+      Alert.alert(
+        'Cancel Subscription',
+        'To cancel your subscription, please use the "Manage Subscription" option or contact support.',
+        [
+          { text: 'Not Now', style: 'cancel' },
+          { text: 'Manage Subscription', onPress: handleManageSubscription },
+        ]
+      );
+    } else {
+      Alert.alert(
+        'Cancel Subscription',
+        'To cancel your subscription, you\'ll need to manage it through the App Store or Google Play Store. Would you like to open subscription settings?',
+        [
+          { text: 'Not Now', style: 'cancel' },
+          { text: 'Open Settings', onPress: handleManageSubscription },
+        ]
+      );
+    }
   };
 
   const handleTermsPress = () => {
@@ -397,8 +487,9 @@ export default function PremiumScreen() {
           {/* Info Text */}
           <View style={styles.infoContainer}>
             <Text style={styles.infoText}>
-              Subscriptions are managed through the App Store or Google Play Store. 
-              Cancellation takes effect at the end of your current billing period.
+              {Platform.OS === 'web' 
+                ? 'Subscriptions are managed through Stripe. Cancellation takes effect at the end of your current billing period.'
+                : 'Subscriptions are managed through the App Store or Google Play Store. Cancellation takes effect at the end of your current billing period.'}
             </Text>
           </View>
             </ScrollView>
@@ -505,7 +596,7 @@ export default function PremiumScreen() {
         <Button
           title={isPurchasing ? 'Processing...' : 'Start Premium - $4.99/month'}
           onPress={handlePurchase}
-          disabled={isPurchasing || (!selectedPackage && !!offerings)}
+          disabled={isPurchasing || (Platform.OS !== 'web' && !selectedPackage && !!offerings)}
           loading={isPurchasing}
           fullWidth
           style={styles.purchaseButton}
