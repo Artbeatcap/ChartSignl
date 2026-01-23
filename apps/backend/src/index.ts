@@ -14,7 +14,7 @@ const __dirname = dirname(__filename);
 const envPath = resolve(__dirname, '../.env');
 
 // #region agent log
-try{const logPath='c:\\Users\\Art\\VScode\\chartsignl\\.cursor\\debug.log';appendFileSync(logPath,JSON.stringify({location:'index.ts:14',message:'checking env file',data:{envPath,exists:existsSync(envPath),cwd:process.cwd(),dirname:__dirname},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})+'\n');}catch(e){console.error('Log error:',e.message);}
+try{const logPath='c:\\Users\\Art\\VScode\\chartsignl\\.cursor\\debug.log';appendFileSync(logPath,JSON.stringify({location:'index.ts:14',message:'checking env file',data:{envPath,exists:existsSync(envPath),cwd:process.cwd(),dirname:__dirname},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})+'\n');}catch(e: unknown){console.error('Log error:',e instanceof Error?e.message:String(e));}
 // #endregion
 
 if (existsSync(envPath)) {
@@ -22,18 +22,18 @@ if (existsSync(envPath)) {
   if (result.error) {
     console.error('Error loading .env file:', result.error);
     // #region agent log
-    try{const logPath='c:\\Users\\Art\\VScode\\chartsignl\\.cursor\\debug.log';appendFileSync(logPath,JSON.stringify({location:'index.ts:19',message:'env file load error',data:{error:result.error.message},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})+'\n');}catch(e){console.error('Log error:',e.message);}
+    try{const logPath='c:\\Users\\Art\\VScode\\chartsignl\\.cursor\\debug.log';appendFileSync(logPath,JSON.stringify({location:'index.ts:19',message:'env file load error',data:{error:result.error.message},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})+'\n');}catch(e: unknown){console.error('Log error:',e instanceof Error?e.message:String(e));}
     // #endregion
   } else {
     console.log(`✓ Loaded .env from: ${envPath}`);
     // #region agent log
-    try{const logPath='c:\\Users\\Art\\VScode\\chartsignl\\.cursor\\debug.log';appendFileSync(logPath,JSON.stringify({location:'index.ts:22',message:'env file loaded',data:{envPath,parsed:Object.keys(result.parsed||{}),massiveKeyInParsed:!!result.parsed?.MASSIVE_API_KEY},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})+'\n');}catch(e){console.error('Log error:',e.message);}
+    try{const logPath='c:\\Users\\Art\\VScode\\chartsignl\\.cursor\\debug.log';appendFileSync(logPath,JSON.stringify({location:'index.ts:22',message:'env file loaded',data:{envPath,parsed:Object.keys(result.parsed||{}),massiveKeyInParsed:!!result.parsed?.MASSIVE_API_KEY},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})+'\n');}catch(e: unknown){console.error('Log error:',e instanceof Error?e.message:String(e));}
     // #endregion
   }
 } else {
   console.warn(`⚠️  .env file not found at: ${envPath}`);
   // #region agent log
-  try{const logPath='c:\\Users\\Art\\VScode\\chartsignl\\.cursor\\debug.log';appendFileSync(logPath,JSON.stringify({location:'index.ts:25',message:'env file not found',data:{envPath,fallback:true},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})+'\n');}catch(e){console.error('Log error:',e.message);}
+  try{const logPath='c:\\Users\\Art\\VScode\\chartsignl\\.cursor\\debug.log';appendFileSync(logPath,JSON.stringify({location:'index.ts:25',message:'env file not found',data:{envPath,fallback:true},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})+'\n');}catch(e: unknown){console.error('Log error:',e instanceof Error?e.message:String(e));}
   // #endregion
   config(); // Fallback to default dotenv behavior
 }
@@ -46,7 +46,7 @@ console.log(`  SUPABASE_URL: ${process.env.SUPABASE_URL ? '✓ Set' : '✗ Missi
 console.log(`  OPENAI_API_KEY: ${process.env.OPENAI_API_KEY ? '✓ Set' : '✗ Missing'}`);
 
 // #region agent log
-try{const logPath='c:\\Users\\Art\\VScode\\chartsignl\\.cursor\\debug.log';appendFileSync(logPath,JSON.stringify({location:'index.ts:33',message:'env vars after load',data:{hasMassiveKey:!!process.env.MASSIVE_API_KEY,massiveKeyLength:process.env.MASSIVE_API_KEY?.length||0,allEnvKeys:Object.keys(process.env).filter(k=>k.includes('MASSIVE')||k.includes('massive')),cwd:process.cwd()},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})+'\n');}catch(e){console.error('Log error:',e.message);}
+try{const logPath='c:\\Users\\Art\\VScode\\chartsignl\\.cursor\\debug.log';appendFileSync(logPath,JSON.stringify({location:'index.ts:33',message:'env vars after load',data:{hasMassiveKey:!!process.env.MASSIVE_API_KEY,massiveKeyLength:process.env.MASSIVE_API_KEY?.length||0,allEnvKeys:Object.keys(process.env).filter(k=>k.includes('MASSIVE')||k.includes('massive')),cwd:process.cwd()},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})+'\n');}catch(e: unknown){console.error('Log error:',e instanceof Error?e.message:String(e));}
 // #endregion
 
 // Routes
@@ -65,7 +65,7 @@ app.use('*', logger());
 app.use('*', async (c, next) => {
   console.log('[MIDDLEWARE] Incoming request:', c.req.method, c.req.path, c.req.url);
   // #region agent log
-  try{const logPath='c:\\Users\\Art\\VScode\\chartsignl\\.cursor\\debug.log';appendFileSync(logPath,JSON.stringify({location:'index.ts:65',message:'incoming request',data:{method:c.req.method,path:c.req.path,url:c.req.url},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'A'})+'\n');}catch(e){console.error('Log error:',e.message);}
+  try{const logPath='c:\\Users\\Art\\VScode\\chartsignl\\.cursor\\debug.log';appendFileSync(logPath,JSON.stringify({location:'index.ts:65',message:'incoming request',data:{method:c.req.method,path:c.req.path,url:c.req.url},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'A'})+'\n');}catch(e: unknown){console.error('Log error:',e instanceof Error?e.message:String(e));}
   // #endregion
   await next();
 });
@@ -114,13 +114,13 @@ app.route('/api/market-data', marketDataRoute);
 app.route('/api/subscription', subscriptionRoute);
 
 // #region agent log
-try{const logPath='c:\\Users\\Art\\VScode\\chartsignl\\.cursor\\debug.log';appendFileSync(logPath,JSON.stringify({location:'index.ts:94',message:'routes registered',data:{routes:['analyze-data','analyses','user','market-data','subscription']},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})+'\n');}catch(e){console.error('Log error:',e.message);}
+try{const logPath='c:\\Users\\Art\\VScode\\chartsignl\\.cursor\\debug.log';appendFileSync(logPath,JSON.stringify({location:'index.ts:94',message:'routes registered',data:{routes:['analyze-data','analyses','user','market-data','subscription']},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})+'\n');}catch(e: unknown){console.error('Log error:',e instanceof Error?e.message:String(e));}
 // #endregion
 
 // 404 handler
 app.notFound((c) => {
   // #region agent log
-  try{const logPath='c:\\Users\\Art\\VScode\\chartsignl\\.cursor\\debug.log';appendFileSync(logPath,JSON.stringify({location:'index.ts:97',message:'404 not found',data:{method:c.req.method,path:c.req.path,url:c.req.url},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})+'\n');}catch(e){console.error('Log error:',e.message);}
+  try{const logPath='c:\\Users\\Art\\VScode\\chartsignl\\.cursor\\debug.log';appendFileSync(logPath,JSON.stringify({location:'index.ts:97',message:'404 not found',data:{method:c.req.method,path:c.req.path,url:c.req.url},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})+'\n');}catch(e: unknown){console.error('Log error:',e instanceof Error?e.message:String(e));}
   // #endregion
   return c.json({ error: 'Not found' }, 404);
 });
@@ -129,7 +129,7 @@ app.notFound((c) => {
 app.onError((err, c) => {
   console.error('Server error:', err);
   // #region agent log
-  try{const logPath='c:\\Users\\Art\\VScode\\chartsignl\\.cursor\\debug.log';appendFileSync(logPath,JSON.stringify({location:'index.ts:102',message:'server error handler',data:{error:err.message,stack:err.stack,path:c.req.path,method:c.req.method},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})+'\n');}catch(e){console.error('Log error:',e.message);}
+  try{const logPath='c:\\Users\\Art\\VScode\\chartsignl\\.cursor\\debug.log';appendFileSync(logPath,JSON.stringify({location:'index.ts:102',message:'server error handler',data:{error:err.message,stack:err.stack,path:c.req.path,method:c.req.method},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})+'\n');}catch(e: unknown){console.error('Log error:',e instanceof Error?e.message:String(e));}
   // #endregion
   return c.json({
     error: 'Internal server error',
