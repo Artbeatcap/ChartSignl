@@ -65,6 +65,15 @@ export default function WelcomeScreen() {
                 Sign in
               </Text>
             </Text>
+            <Text style={styles.privacyText}>
+              By continuing, you agree to our{' '}
+              <Text
+                style={styles.privacyLink}
+                onPress={() => router.push('/(settings)/privacy')}
+              >
+                Privacy Policy
+              </Text>
+            </Text>
           </View>
         </View>
       </View>
@@ -175,6 +184,16 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   signInLink: {
+    color: colors.primary[600],
+    fontWeight: '600',
+  },
+  privacyText: {
+    ...typography.bodySm,
+    color: colors.neutral[500],
+    textAlign: 'center',
+    marginTop: spacing.xs,
+  },
+  privacyLink: {
     color: colors.primary[600],
     fontWeight: '600',
   },
