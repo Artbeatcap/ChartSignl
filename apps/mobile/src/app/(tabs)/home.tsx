@@ -123,7 +123,7 @@ export default function HomeScreen() {
     if (!usage.isPro && usage.freeAnalysesUsed >= FREE_ANALYSIS_LIMIT) {
       Alert.alert(
         '🔒 Free Limit Reached',
-        `You've used all ${FREE_ANALYSIS_LIMIT} free AI analyses. Upgrade to Pro for unlimited analyses, plus faster updates and priority support!`,
+        `You've used all ${FREE_ANALYSIS_LIMIT} free Atlas analyses. Upgrade to Pro for unlimited analyses, plus faster updates and priority support!`,
         [
           { text: 'Maybe Later', style: 'cancel' },
           {
@@ -352,10 +352,10 @@ export default function HomeScreen() {
           <Button
             title={
               isAnalyzing 
-                ? 'Analyzing...' 
+                ? 'Atlas is analyzing...' 
                 : !usage?.isPro && usage && usage.freeAnalysesUsed >= FREE_ANALYSIS_LIMIT
                 ? '🔒 Upgrade for More'
-                : '🤖 Ask AI for Levels'
+                : '🗺️ Ask Atlas AI for Levels'
             }
             onPress={handleAskAI}
             size="lg"
@@ -378,8 +378,8 @@ export default function HomeScreen() {
             !usage?.isPro && usage && usage.freeAnalysesUsed >= FREE_ANALYSIS_LIMIT && styles.aiHintWarning
           ]}>
             {!usage?.isPro && usage && usage.freeAnalysesUsed >= FREE_ANALYSIS_LIMIT
-              ? `🔓 You've used all ${FREE_ANALYSIS_LIMIT} free analyses. Tap to upgrade for unlimited!`
-              : 'Uses AI to identify key support & resistance levels'}
+              ? `🔓 You've used all ${FREE_ANALYSIS_LIMIT} free Atlas analyses. Tap to upgrade for unlimited!`
+              : 'Atlas identifies key support & resistance levels for you'}
           </Text>
         </View>
 
@@ -387,7 +387,7 @@ export default function HomeScreen() {
         {aiAnalysis && (
           <Card style={styles.analysisCard}>
             <View style={styles.analysisHeader}>
-              <Text style={styles.analysisTitle}>🎯 AI Analysis</Text>
+              <Text style={styles.analysisTitle}>🗺️ Atlas Analysis</Text>
               <View style={styles.confidenceBadge}>
                 <Text style={styles.confidenceText}>{aiAnalysis.overallConfidence}% confidence</Text>
               </View>
