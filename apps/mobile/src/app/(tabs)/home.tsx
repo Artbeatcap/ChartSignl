@@ -195,16 +195,27 @@ export default function HomeScreen() {
             </Text>
             <Text style={styles.subtitle}>Find the key levels</Text>
           </View>
-          <View style={[
-            styles.usageBadge,
-            !usage?.isPro && usage && usage.freeAnalysesUsed >= FREE_ANALYSIS_LIMIT && styles.usageBadgeWarning
-          ]}>
-            <Text style={[
-              styles.usageText,
-              !usage?.isPro && usage && usage.freeAnalysesUsed >= FREE_ANALYSIS_LIMIT && styles.usageTextWarning
+          <View style={styles.headerRight}>
+            <View style={[
+              styles.usageBadge,
+              !usage?.isPro && usage && usage.freeAnalysesUsed >= FREE_ANALYSIS_LIMIT && styles.usageBadgeWarning
             ]}>
-              {usage?.isPro ? '✨ Pro' : usage ? `${remainingAnalyses} left` : '...'}
-            </Text>
+              <Text style={[
+                styles.usageText,
+                !usage?.isPro && usage && usage.freeAnalysesUsed >= FREE_ANALYSIS_LIMIT && styles.usageTextWarning
+              ]}>
+                {usage?.isPro ? '✨ Pro' : usage ? `${remainingAnalyses} left` : '...'}
+              </Text>
+            </View>
+            {!usage?.isPro && (
+              <TouchableOpacity
+                style={styles.upgradeButton}
+                onPress={() => router.push('/premium')}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.upgradeButtonText}>Upgrade</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
 
@@ -588,6 +599,21 @@ const styles = StyleSheet.create({
   usageTextWarning: {
     color: colors.red[700],
     fontWeight: '700',
+  },
+  headerRight: {
+    alignItems: 'flex-end',
+  },
+  upgradeButton: {
+    backgroundColor: colors.primary[500],
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.full,
+    marginTop: spacing.xs,
+  },
+  upgradeButtonText: {
+    ...typography.labelSm,
+    color: colors.white,
+    fontWeight: '600',
   },
   // Symbol selector
   symbolSelector: {
