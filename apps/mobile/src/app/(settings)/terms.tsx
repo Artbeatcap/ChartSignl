@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { colors, typography, spacing, borderRadius } from '../../theme';
 
@@ -9,16 +9,18 @@ export default function TermsScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Text style={styles.backText}>← Back</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Terms of Service</Text>
-        <View style={styles.placeholder} />
-      </View>
+      <View style={styles.webWrapper}>
+        <View style={styles.webInner}>
+          {/* Header */}
+          <View style={styles.header}>
+            <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+              <Text style={styles.backText}>← Back</Text>
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>Terms of Service</Text>
+            <View style={styles.placeholder} />
+          </View>
 
-      <ScrollView
+          <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -209,15 +211,28 @@ export default function TermsScreen() {
             your initial investment. You should only invest money that you can afford to lose.
           </Text>
         </View>
-      </ScrollView>
+          </ScrollView>
+        </View>
+      </View>
     </SafeAreaView>
   );
 }
+
+const WEB_MAX_WIDTH = 900;
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  webWrapper: {
+    flex: 1,
+    ...(Platform.OS === 'web' && { alignItems: 'center' }),
+  },
+  webInner: {
+    flex: 1,
+    width: '100%',
+    ...(Platform.OS === 'web' && { maxWidth: WEB_MAX_WIDTH }),
   },
   // Header
   header: {

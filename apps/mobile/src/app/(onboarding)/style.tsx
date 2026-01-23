@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Button, ProgressIndicator } from '../../components';
 import { useOnboardingStore } from '../../store/onboardingStore';
@@ -16,15 +16,17 @@ export default function StyleScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Text style={styles.backButton}>←</Text>
-        </TouchableOpacity>
-        <ProgressIndicator current={1} total={4} />
-      </View>
+      <View style={styles.webWrapper}>
+        <View style={styles.webInner}>
+          {/* Header */}
+          <View style={styles.header}>
+            <TouchableOpacity onPress={() => router.back()}>
+              <Text style={styles.backButton}>←</Text>
+            </TouchableOpacity>
+            <ProgressIndicator current={1} total={4} />
+          </View>
 
-      <ScrollView
+          <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -69,26 +71,39 @@ export default function StyleScreen() {
             </TouchableOpacity>
           ))}
         </View>
-      </ScrollView>
+          </ScrollView>
 
-      {/* Bottom CTA */}
-      <View style={styles.bottomSection}>
-        <Button
-          title="Continue"
-          onPress={handleContinue}
-          size="lg"
-          fullWidth
-          disabled={!answers.tradingStyle}
-        />
+          {/* Bottom CTA */}
+          <View style={styles.bottomSection}>
+            <Button
+              title="Continue"
+              onPress={handleContinue}
+              size="lg"
+              fullWidth
+              disabled={!answers.tradingStyle}
+            />
+          </View>
+        </View>
       </View>
     </SafeAreaView>
   );
 }
 
+const WEB_MAX_WIDTH = 800;
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  webWrapper: {
+    flex: 1,
+    ...(Platform.OS === 'web' && { alignItems: 'center' }),
+  },
+  webInner: {
+    flex: 1,
+    width: '100%',
+    ...(Platform.OS === 'web' && { maxWidth: WEB_MAX_WIDTH }),
   },
   header: {
     flexDirection: 'row',

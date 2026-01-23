@@ -167,19 +167,21 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Email Verification Modal - shows once after signup */}
-      {showEmailVerificationModal && (
-        <EmailVerificationBanner 
-          variant="modal" 
-          onDismiss={() => setShowEmailVerificationModal(false)}
-        />
-      )}
-      
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
+      <View style={styles.webWrapper}>
+        <View style={styles.webInner}>
+          {/* Email Verification Modal - shows once after signup */}
+          {showEmailVerificationModal && (
+            <EmailVerificationBanner 
+              variant="modal" 
+              onDismiss={() => setShowEmailVerificationModal(false)}
+            />
+          )}
+          
+          <ScrollView
+            style={styles.scrollView}
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+          >
         {/* Email Verification Banner - persistent reminder */}
         {!isEmailVerified && <EmailVerificationBanner variant="banner" />}
         
@@ -469,15 +471,17 @@ export default function HomeScreen() {
             )}
           </Card>
         )}
-      </ScrollView>
+          </ScrollView>
 
-      {/* Symbol Search Modal */}
-      <SymbolSearch
-        visible={showSymbolSearch}
-        onClose={() => setShowSymbolSearch(false)}
-        onSelectSymbol={handleSelectSymbol}
-        currentSymbol={selectedSymbol}
-      />
+          {/* Symbol Search Modal */}
+          <SymbolSearch
+            visible={showSymbolSearch}
+            onClose={() => setShowSymbolSearch(false)}
+            onSelectSymbol={handleSelectSymbol}
+            currentSymbol={selectedSymbol}
+          />
+        </View>
+      </View>
     </SafeAreaView>
   );
 }
@@ -536,6 +540,13 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  webWrapper: {
+    flex: 1,
+  },
+  webInner: {
+    flex: 1,
+    width: '100%',
   },
   scrollView: {
     flex: 1,

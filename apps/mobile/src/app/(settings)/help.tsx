@@ -7,6 +7,7 @@ import {
   ScrollView,
   TouchableOpacity,
   Linking,
+  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Card } from '../../components';
@@ -77,20 +78,22 @@ export default function HelpScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Text style={styles.backText}>← Back</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Help & Support</Text>
-        <View style={styles.placeholder} />
-      </View>
+      <View style={styles.webWrapper}>
+        <View style={styles.webInner}>
+          {/* Header */}
+          <View style={styles.header}>
+            <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+              <Text style={styles.backText}>← Back</Text>
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>Help & Support</Text>
+            <View style={styles.placeholder} />
+          </View>
 
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
+          <ScrollView
+            style={styles.scrollView}
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+          >
         {/* FAQ Section */}
         <Text style={styles.sectionTitle}>Frequently Asked Questions</Text>
 
@@ -149,15 +152,28 @@ export default function HelpScreen() {
             • Review your analysis history to track your progress
           </Text>
         </View>
-      </ScrollView>
+          </ScrollView>
+        </View>
+      </View>
     </SafeAreaView>
   );
 }
+
+const WEB_MAX_WIDTH = 900;
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  webWrapper: {
+    flex: 1,
+    ...(Platform.OS === 'web' && { alignItems: 'center' }),
+  },
+  webInner: {
+    flex: 1,
+    width: '100%',
+    ...(Platform.OS === 'web' && { maxWidth: WEB_MAX_WIDTH }),
   },
   // Header
   header: {

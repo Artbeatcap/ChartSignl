@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, SafeAreaView, Image } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, Image, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Button } from '../../components';
 import { colors, typography, spacing } from '../../theme';
@@ -8,10 +8,12 @@ export default function WelcomeScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Decorative gradient */}
-      <View style={styles.gradientTop} />
+      <View style={styles.webWrapper}>
+        <View style={styles.webInner}>
+          {/* Decorative gradient */}
+          <View style={styles.gradientTop} />
 
-      <View style={styles.content}>
+          <View style={styles.content}>
         {/* Hero section */}
         <View style={styles.heroSection}>
           <Text style={styles.brandName}>ChartSignl</Text>
@@ -44,25 +46,27 @@ export default function WelcomeScreen() {
             text="Calm, focused trading"
           />
         </View>
-      </View>
+          </View>
 
-      {/* Bottom CTA */}
-      <View style={styles.bottomSection}>
-        <Button
-          title="Get Started"
-          onPress={() => router.push('/(onboarding)/style')}
-          size="lg"
-          fullWidth
-        />
-        <Text style={styles.alreadyText}>
-          Already have an account?{' '}
-          <Text
-            style={styles.signInLink}
-            onPress={() => router.push('/(onboarding)/account')}
-          >
-            Sign in
-          </Text>
-        </Text>
+          {/* Bottom CTA */}
+          <View style={styles.bottomSection}>
+            <Button
+              title="Get Started"
+              onPress={() => router.push('/(onboarding)/style')}
+              size="lg"
+              fullWidth
+            />
+            <Text style={styles.alreadyText}>
+              Already have an account?{' '}
+              <Text
+                style={styles.signInLink}
+                onPress={() => router.push('/(onboarding)/account')}
+              >
+                Sign in
+              </Text>
+            </Text>
+          </View>
+        </View>
       </View>
     </SafeAreaView>
   );
@@ -77,10 +81,21 @@ function FeatureItem({ emoji, text }: { emoji: string; text: string }) {
   );
 }
 
+const WEB_MAX_WIDTH = 800;
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  webWrapper: {
+    flex: 1,
+    ...(Platform.OS === 'web' && { alignItems: 'center' }),
+  },
+  webInner: {
+    flex: 1,
+    width: '100%',
+    ...(Platform.OS === 'web' && { maxWidth: WEB_MAX_WIDTH }),
   },
   gradientTop: {
     position: 'absolute',

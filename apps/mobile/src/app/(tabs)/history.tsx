@@ -1,6 +1,6 @@
 // Simplified History Screen - Data Only (No Images)
 
-import { View, Text, StyleSheet, SafeAreaView, FlatList, TouchableOpacity, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, FlatList, TouchableOpacity, RefreshControl, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { getAnalysisHistory } from '../../lib/api';
@@ -81,36 +81,60 @@ export default function HistoryScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>History</Text>
-        <Text style={styles.headerSubtitle}>
-          {analyses.length} {analyses.length === 1 ? 'analysis' : 'analyses'}
-        </Text>
-      </View>
+      <View style={styles.webWrapper}>
+        <View style={styles.webInner}>
+          <View style={styles.header}>
+            <Text style={styles.headerTitle}>History</Text>
+            <Text style={styles.headerSubtitle}>
+              {analyses.length} {analyses.length === 1 ? 'analysis' : 'analyses'}
+            </Text>
+          </View>
 
-      <FlatList
-        data={analyses}
-        keyExtractor={(item) => item.id}
-        renderItem={renderItem}
-        contentContainerStyle={styles.listContent}
-        showsVerticalScrollIndicator={false}
-        ListEmptyComponent={!isLoading ? renderEmptyState : null}
-        refreshControl={
-          <RefreshControl
-            refreshing={isRefetching}
-            onRefresh={refetch}
-            tintColor={colors.primary[500]}
+          <FlatList
+            data={analyses}
+            keyExtractor={(item) => item.id}
+            renderItem={renderItem}
+            contentContainerStyle={styles.listContent}
+            showsVerticalScrollIndicator={false}
+            ListEmptyComponent={!isLoading ? renderEmptyState : null}
+            refreshControl={
+              <RefreshControl
+                refreshing={isRefetching}
+                onRefresh={refetch}
+                tintColor={colors.primary[500]}
+              />
+            }
           />
-        }
-      />
+        </View>
+      </View>
     </SafeAreaView>
   );
 }
+
+const WEB_MAX_WIDTH = 1100;
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  webWrapper: {
+    flex: 1,
+    ...(Platform.OS === 'web' && {
+      alignItems: 'center',
+      backgroundColor: colors.neutral[100],
+    }),
+  },
+  webInner: {
+    flex: 1,
+    width: '100%',
+    ...(Platform.OS === 'web' && {
+      maxWidth: WEB_MAX_WIDTH,
+      backgroundColor: colors.background,
+      borderLeftWidth: 1,
+      borderRightWidth: 1,
+      borderColor: colors.neutral[200],
+    }),
   },
   header: {
     paddingHorizontal: spacing.lg,
