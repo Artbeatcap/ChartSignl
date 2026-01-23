@@ -42,14 +42,14 @@ export default function TermsScreen() {
         {/* Section 2 */}
         <Text style={styles.sectionTitle}>2. Description of Service</Text>
         <Text style={styles.paragraph}>
-          ChartSignl provides AI-powered stock chart analysis tools to help identify support
+          ChartSignl provides Atlas AI-powered stock chart analysis tools to help identify support
           and resistance levels. Our service includes:
         </Text>
         <Text style={styles.bulletItem}>
           • Interactive stock and cryptocurrency charts
         </Text>
         <Text style={styles.bulletItem}>
-          • AI-powered technical analysis
+          • Atlas AI-powered technical analysis
         </Text>
         <Text style={styles.bulletItem}>
           • Support and resistance level detection
@@ -136,7 +136,7 @@ export default function TermsScreen() {
           <Text style={styles.disclaimerText}>
             ChartSignl provides educational and informational analysis tools only. We do not
             provide investment advice, financial advice, or trading recommendations. The analysis
-            provided by our AI is for informational purposes and should not be construed as
+            provided by Atlas is for informational purposes and should not be construed as
             professional investment advice.
           </Text>
           <Text style={[styles.disclaimerText, { marginTop: spacing.sm }]}>

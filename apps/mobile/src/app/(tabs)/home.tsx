@@ -34,7 +34,7 @@ export default function HomeScreen() {
   const [showSymbolSearch, setShowSymbolSearch] = useState(false);
   const [showEMA, setShowEMA] = useState(true);
 
-  // AI Analysis state
+  // Atlas Analysis state
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [aiAnalysis, setAiAnalysis] = useState<EnhancedAIAnalysis | null>(null);
   const [localLevels, setLocalLevels] = useState<{ support: AILevel[]; resistance: AILevel[] }>({
@@ -111,7 +111,7 @@ export default function HomeScreen() {
     setShowLevels(false);
   };
 
-  // Handle AI analysis
+  // Handle Atlas analysis
   const handleAskAI = async () => {
     // If usage data isn't loaded yet, show a message
     if (!usage) {
@@ -148,7 +148,7 @@ export default function HomeScreen() {
       // Refresh usage
       queryClient.invalidateQueries({ queryKey: ['usage'] });
     } catch (err) {
-      console.error('AI analysis error:', err);
+      console.error('Atlas analysis error:', err);
       const errorMsg = err instanceof Error ? err.message : 'Please try again';
       setErrorMessage(errorMsg); // Set error message for web display
       // Show alert on native platforms only
@@ -358,7 +358,7 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* AI Analysis Button */}
+        {/* Atlas Analysis Button */}
         <View style={styles.aiSection}>
           <Button
             title={
@@ -394,7 +394,7 @@ export default function HomeScreen() {
           </Text>
         </View>
 
-        {/* AI Analysis Results */}
+        {/* Atlas Analysis Results */}
         {aiAnalysis && (
           <Card style={styles.analysisCard}>
             <View style={styles.analysisHeader}>

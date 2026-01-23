@@ -34,8 +34,8 @@ export default function WelcomeScreen() {
         {/* Features */}
         <View style={styles.features}>
           <FeatureItem
-            emoji="✨"
-            text="AI-powered level detection"
+            emoji="🗺️"
+            text="Atlas AI-powered level detection"
           />
           <FeatureItem
             emoji="🎯"

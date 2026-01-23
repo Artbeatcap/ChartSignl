@@ -33,8 +33,8 @@ interface ComparisonItem {
 const PREMIUM_FEATURES: PremiumFeature[] = [
   {
     icon: 'infinite',
-    title: 'Unlimited AI Analysis',
-    description: 'Get unlimited chart analyses every week without restrictions',
+    title: 'Unlimited Atlas Analyses',
+    description: 'Get unlimited AI-powered level detection',
   },
   {
     icon: 'layers',
@@ -44,7 +44,7 @@ const PREMIUM_FEATURES: PremiumFeature[] = [
   {
     icon: 'analytics',
     title: 'Support & Resistance Levels',
-    description: 'AI-identified key price levels with confluence scoring',
+    description: 'Atlas-identified key price levels with confluence scoring',
   },
   {
     icon: 'trending-up',

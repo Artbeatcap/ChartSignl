@@ -22,42 +22,48 @@ interface FAQItem {
 const FAQ_ITEMS: FAQItem[] = [
   {
     id: '1',
-    question: 'How does ChartSignl analyze charts?',
+    question: 'Who is Atlas?',
     answer:
-      'ChartSignl uses AI-powered technical analysis to identify key support and resistance levels on your charts. We analyze price action, volume patterns, and historical data to find confluence zones where multiple technical factors align.',
+      'Atlas is your AI-powered chart analysis assistant. Named after the Greek Titan who held up the celestial heavens, Atlas helps you navigate charts and identify key support/resistance levels with confidence.',
   },
   {
     id: '2',
-    question: 'What symbols can I search for?',
+    question: 'How does Atlas analyze charts?',
     answer:
-      'You can search for US stocks, ETFs, and major indices. Simply enter a ticker symbol (like AAPL, SPY, or QQQ) in the search bar to view charts and get AI analysis.',
+      'Atlas uses advanced technical analysis to identify confluence zones where multiple factors align - including EMAs, Fibonacci levels, volume profiles, and historical price action. This multi-factor approach helps Atlas find the most reliable trading levels.',
   },
   {
     id: '3',
-    question: 'How many free analyses do I get?',
+    question: 'What symbols can I search for?',
     answer:
-      'Free accounts include 3 analyses per week. After that, you can upgrade to Pro for unlimited analyses. Pro subscribers also get access to additional features like price alerts and advanced technical indicators.',
+      'You can search for US stocks, ETFs, and major indices. Simply enter a ticker symbol (like AAPL, SPY, or QQQ) in the search bar to view charts and get Atlas analysis.',
   },
   {
     id: '4',
+    question: 'How many free analyses do I get?',
+    answer:
+      'Free accounts include 3 Atlas analyses per week. After that, you can upgrade to Pro for unlimited analyses. Pro subscribers also get access to additional features like price alerts and advanced technical indicators.',
+  },
+  {
+    id: '5',
     question: 'What timeframes are available?',
     answer:
       'ChartSignl supports multiple timeframes including 1-hour, 4-hour, daily, and weekly charts. Different timeframes are useful for different trading styles - day traders often use shorter timeframes, while swing traders prefer daily or weekly charts.',
   },
   {
-    id: '5',
-    question: 'How accurate is the AI analysis?',
+    id: '6',
+    question: 'How accurate is Atlas analysis?',
     answer:
-      'Our AI identifies technical levels based on historical price action and multiple indicators. While no analysis is perfect, we use confluence scoring to highlight the strongest levels. Always combine our analysis with your own research and risk management.',
+      'Atlas identifies technical levels based on historical price action and multiple indicators. While no analysis is perfect, we use confluence scoring to highlight the strongest levels. Always combine Atlas analysis with your own research and risk management.',
   },
   {
-    id: '6',
+    id: '7',
     question: 'Can I delete my analysis history?',
     answer:
       'Yes! Go to the History tab, swipe left on any analysis to delete it. You can also view past analyses by tapping on them.',
   },
   {
-    id: '7',
+    id: '8',
     question: 'How do I change my trading style profile?',
     answer:
       'Tap on your Profile tab, then select "Edit Profile" to update your trading style, experience level, and display name. This helps us tailor the analysis to your trading approach.',
