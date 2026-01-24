@@ -9,24 +9,38 @@ const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
 // Custom storage adapter for React Native
 const ExpoSecureStoreAdapter = {
   getItem: async (key: string) => {
-    if (Platform.OS === 'web') {
-      return localStorage.getItem(key);
+    try {
+      if (Platform.OS === 'web') {
+        return localStorage.getItem(key);
+      }
+      return await SecureStore.getItemAsync(key);
+    } catch (error) {
+      console.error('Error getting item from storage:', error);
+      return null;
     }
-    return SecureStore.getItemAsync(key);
   },
   setItem: async (key: string, value: string) => {
-    if (Platform.OS === 'web') {
-      localStorage.setItem(key, value);
-      return;
+    try {
+      if (Platform.OS === 'web') {
+        localStorage.setItem(key, value);
+        return;
+      }
+      await SecureStore.setItemAsync(key, value);
+    } catch (error) {
+      console.error('Error setting item in storage:', error);
+      throw error;
     }
-    await SecureStore.setItemAsync(key, value);
   },
   removeItem: async (key: string) => {
-    if (Platform.OS === 'web') {
-      localStorage.removeItem(key);
-      return;
+    try {
+      if (Platform.OS === 'web') {
+        localStorage.removeItem(key);
+        return;
+      }
+      await SecureStore.deleteItemAsync(key);
+    } catch (error) {
+      console.error('Error removing item from storage:', error);
     }
-    await SecureStore.deleteItemAsync(key);
   },
 };
 

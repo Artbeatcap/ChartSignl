@@ -189,7 +189,17 @@ export default function PremiumScreen() {
 
   const handlePurchase = async () => {
     if (!user) {
-      Alert.alert('Error', 'You must be logged in to purchase a subscription.');
+      Alert.alert(
+        'Login Required',
+        'You must be logged in to purchase a subscription. Please sign in or create an account first.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { 
+            text: 'Sign In', 
+            onPress: () => router.replace('/(onboarding)/account')
+          }
+        ]
+      );
       return;
     }
 
@@ -202,15 +212,27 @@ export default function PremiumScreen() {
           // Redirect to Stripe checkout
           await Linking.openURL(result.checkoutUrl);
         } else {
-          Alert.alert('Error', 'Failed to create checkout session. Please try again.');
+          Alert.alert(
+            'Checkout Error',
+            'Failed to create checkout session. Please try again or contact support if the problem persists.',
+            [{ text: 'OK' }]
+          );
         }
       } catch (error: any) {
         console.error('Purchase error:', error);
-        Alert.alert(
-          'Purchase Failed',
-          error.message || 'An error occurred during purchase. Please try again.',
-          [{ text: 'OK' }]
-        );
+        const errorMessage = error?.message || error?.error || 'An error occurred during purchase.';
+        
+        // Provide more specific error messages
+        let userMessage = 'An error occurred during purchase. Please try again.';
+        if (errorMessage.includes('authorization') || errorMessage.includes('token')) {
+          userMessage = 'Your session has expired. Please sign in again and try again.';
+        } else if (errorMessage.includes('network') || errorMessage.includes('fetch')) {
+          userMessage = 'Network error. Please check your connection and try again.';
+        } else if (errorMessage) {
+          userMessage = errorMessage;
+        }
+        
+        Alert.alert('Purchase Failed', userMessage, [{ text: 'OK' }]);
       } finally {
         setIsPurchasing(false);
       }
@@ -397,7 +419,7 @@ export default function PremiumScreen() {
           <View style={styles.webInner}>
             <View style={styles.topHeader}>
               <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                <Ionicons name="arrow-back" size={24} color={colors.neutral[600]} />
+                <Text style={styles.backText}>← Back</Text>
               </TouchableOpacity>
             </View>
             <View style={styles.loadingContainer}>
@@ -418,7 +440,7 @@ export default function PremiumScreen() {
           <View style={styles.webInner}>
             <View style={styles.topHeader}>
               <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                <Ionicons name="arrow-back" size={24} color={colors.neutral[600]} />
+                <Text style={styles.backText}>← Back</Text>
               </TouchableOpacity>
             </View>
             <ScrollView
@@ -501,12 +523,12 @@ export default function PremiumScreen() {
 
   // Non-premium user view - show upgrade options
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.webWrapper}>
-        <View style={styles.webInner}>
+      <SafeAreaView style={styles.container}>
+        <View style={styles.webWrapper}>
+          <View style={styles.webInner}>
           <View style={styles.topHeader}>
             <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-              <Ionicons name="arrow-back" size={24} color={colors.neutral[600]} />
+              <Text style={styles.backText}>← Back</Text>
             </TouchableOpacity>
           </View>
           <ScrollView
@@ -657,8 +679,11 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
   },
   backButton: {
-    padding: spacing.xs,
-    marginLeft: -spacing.xs,
+    minWidth: 60,
+  },
+  backText: {
+    ...typography.bodyMd,
+    color: colors.primary[600],
   },
   scrollView: {
     flex: 1,

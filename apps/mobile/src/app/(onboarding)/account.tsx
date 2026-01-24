@@ -63,23 +63,49 @@ export default function AccountScreen() {
           // Check if email confirmation is required (no session means confirmation needed)
           const needsEmailVerification = !data.session;
           
-          // If we have a session, wait for it to be persisted
+          // If we have a session, wait for it to be persisted and verify it
           if (data.session) {
+            // Wait for session to be saved to storage
             await new Promise(resolve => setTimeout(resolve, 500));
-          }
-          
-          // Save onboarding data to profile (try even without session)
-          try {
-            await updateProfile({
-              display_name: answers.displayName,
-              trading_style: answers.tradingStyle,
-              experience_level: answers.experienceLevel,
-              stress_reducer: answers.stressReducer,
-              onboarding_completed: true,
-            });
-          } catch (profileError) {
-            console.error('Failed to update profile:', profileError);
-            // Continue anyway - profile can be updated later
+            
+            // Verify session is available
+            const { data: { session: verifiedSession } } = await supabase.auth.getSession();
+            if (!verifiedSession) {
+              console.warn('Session not persisted, but user was created');
+            }
+            
+            // Save onboarding data to profile with retry logic
+            let profileCreated = false;
+            let retries = 0;
+            const maxRetries = 3;
+            
+            while (!profileCreated && retries < maxRetries) {
+              try {
+                await updateProfile({
+                  display_name: answers.displayName,
+                  trading_style: answers.tradingStyle,
+                  experience_level: answers.experienceLevel,
+                  stress_reducer: answers.stressReducer,
+                  onboarding_completed: true,
+                });
+                profileCreated = true;
+                console.log('Profile created successfully');
+              } catch (profileError: any) {
+                retries++;
+                console.error(`Failed to update profile (attempt ${retries}/${maxRetries}):`, profileError);
+                
+                if (retries < maxRetries) {
+                  // Wait before retry
+                  await new Promise(resolve => setTimeout(resolve, 1000 * retries));
+                } else {
+                  // Final attempt failed - log but continue
+                  console.error('Profile creation failed after retries, user can update profile later');
+                }
+              }
+            }
+          } else {
+            // No session yet - profile will be created after email verification
+            console.log('User created but email verification required, profile will be created after verification');
           }
 
           // Set pending email verification flag if needed, then navigate to home
@@ -91,12 +117,23 @@ export default function AccountScreen() {
           router.replace('/(tabs)/home');
         }
       } else {
-        const { error: signInError } = await supabase.auth.signInWithPassword({
+        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
           email,
           password,
         });
 
         if (signInError) throw signInError;
+        
+        // Wait for session to be persisted
+        if (signInData.session) {
+          await new Promise(resolve => setTimeout(resolve, 300));
+          
+          // Verify session is available
+          const { data: { session: verifiedSession } } = await supabase.auth.getSession();
+          if (!verifiedSession) {
+            console.warn('Session not persisted after sign in');
+          }
+        }
         
         router.replace('/(tabs)/home');
       }

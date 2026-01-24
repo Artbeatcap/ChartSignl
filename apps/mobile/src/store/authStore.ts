@@ -50,23 +50,38 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     
     set({ isLoading: true });
     
-    // Get initial session
-    const { data: { session } } = await supabase.auth.getSession();
-    
-    // Check email verification status
-    const isEmailVerified = !!session?.user?.email_confirmed_at;
-    
-    set({
-      session,
-      user: session?.user ?? null,
-      isLoading: false,
-      isInitialized: true,
-      isEmailVerified,
-    });
+    try {
+      // Get initial session
+      const { data: { session }, error } = await supabase.auth.getSession();
+      
+      if (error) {
+        console.error('Error getting session:', error);
+      }
+      
+      // Check email verification status
+      const isEmailVerified = !!session?.user?.email_confirmed_at;
+      
+      set({
+        session,
+        user: session?.user ?? null,
+        isLoading: false,
+        isInitialized: true,
+        isEmailVerified,
+      });
 
-    // Check subscription status if user is logged in
-    if (session?.user) {
-      await get().checkSubscriptionStatus();
+      // Check subscription status if user is logged in
+      if (session?.user) {
+        await get().checkSubscriptionStatus();
+      }
+    } catch (error) {
+      console.error('Error initializing auth:', error);
+      set({
+        session: null,
+        user: null,
+        isLoading: false,
+        isInitialized: true,
+        isEmailVerified: false,
+      });
     }
 
     // Listen for auth changes

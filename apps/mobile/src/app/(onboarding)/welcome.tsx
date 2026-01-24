@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, SafeAreaView, Image, Platform } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, Image, Platform, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Button } from '../../components';
 import { colors, typography, spacing } from '../../theme';
@@ -13,68 +13,141 @@ export default function WelcomeScreen() {
           {/* Decorative gradient */}
           <View style={styles.gradientTop} />
 
-          <View style={styles.content}>
-        {/* Hero section */}
-        <View style={styles.heroSection}>
-          <Text style={styles.brandName}>ChartSignl</Text>
-          <View style={styles.logoContainer}>
-            <Image
-              source={require('../../../assets/logo.png')}
-              style={styles.logo}
-              resizeMode="contain"
-            />
-          </View>
-          <Text style={styles.title}>Levels shouldn't{'\n'}feel like guesswork</Text>
-          <Text style={styles.subtitle}>
-            Search any stock. Get the key levels instantly. 
-            Trade with more clarity and less stress.
-          </Text>
-        </View>
+          {Platform.OS === 'web' ? (
+            <>
+              <View style={styles.content}>
+                {/* Hero section */}
+                <View style={styles.heroSection}>
+                  <Text style={styles.brandName}>ChartSignl</Text>
+                  <View style={styles.logoContainer}>
+                    <Image
+                      source={require('../../../assets/logo.png')}
+                      style={styles.logo}
+                      resizeMode="contain"
+                    />
+                  </View>
+                  <Text style={styles.title}>Levels shouldn't{'\n'}feel like guesswork</Text>
+                  <Text style={styles.subtitle}>
+                    Search any stock. Get the key levels instantly. 
+                    Trade with more clarity and less stress.
+                  </Text>
+                </View>
 
-        {/* Features */}
-        <View style={styles.features}>
-          <FeatureItem
-            emoji="🗺️"
-            text="Atlas AI-powered level detection"
-          />
-          <FeatureItem
-            emoji="🎯"
-            text="Support & resistance in seconds"
-          />
-          <FeatureItem
-            emoji="🧘"
-            text="Calm, focused trading"
-          />
-        </View>
-          </View>
+                {/* Features */}
+                <View style={styles.features}>
+                  <FeatureItem
+                    emoji="🗺️"
+                    text="Atlas AI-powered level detection"
+                  />
+                  <FeatureItem
+                    emoji="🎯"
+                    text="Support & resistance in seconds"
+                  />
+                  <FeatureItem
+                    emoji="🧘"
+                    text="Calm, focused trading"
+                  />
+                </View>
+              </View>
 
-          {/* Bottom CTA */}
-          <View style={styles.bottomSection}>
-            <Button
-              title="Get Started"
-              onPress={() => router.push('/(onboarding)/style')}
-              size="lg"
-              fullWidth
-            />
-            <Text style={styles.alreadyText}>
-              Already have an account?{' '}
-              <Text
-                style={styles.signInLink}
-                onPress={() => router.push('/(onboarding)/account')}
-              >
-                Sign in
-              </Text>
-            </Text>
-            <Text style={styles.privacyText}>
-              By continuing, you agree to our{' '}
-              <Text
-                style={styles.privacyLink}
-                onPress={() => router.push('/(settings)/privacy')}
-              >
-                Privacy Policy
-              </Text>
-            </Text>
-          </View>
+              {/* Bottom CTA */}
+              <View style={styles.bottomSection}>
+                <Button
+                  title="Get Started"
+                  onPress={() => router.push('/(onboarding)/style')}
+                  size="lg"
+                  fullWidth
+                />
+                <Text style={styles.alreadyText}>
+                  Already have an account?{' '}
+                  <Text
+                    style={styles.signInLink}
+                    onPress={() => router.push('/(onboarding)/account')}
+                  >
+                    Sign in
+                  </Text>
+                </Text>
+                <Text style={styles.privacyText}>
+                  By continuing, you agree to our{' '}
+                  <Text
+                    style={styles.privacyLink}
+                    onPress={() => router.push('/(settings)/privacy')}
+                  >
+                    Privacy Policy
+                  </Text>
+                </Text>
+              </View>
+            </>
+          ) : (
+            <ScrollView
+              style={styles.scrollView}
+              contentContainerStyle={styles.scrollContent}
+              showsVerticalScrollIndicator={true}
+            >
+              <View style={styles.content}>
+                {/* Hero section */}
+                <View style={styles.heroSection}>
+                  <Text style={styles.brandName}>ChartSignl</Text>
+                  <View style={styles.logoContainer}>
+                    <Image
+                      source={require('../../../assets/logo.png')}
+                      style={styles.logo}
+                      resizeMode="contain"
+                    />
+                  </View>
+                  <Text style={styles.title}>Levels shouldn't{'\n'}feel like guesswork</Text>
+                  <Text style={styles.subtitle}>
+                    Search any stock. Get the key levels instantly. 
+                    Trade with more clarity and less stress.
+                  </Text>
+                </View>
+
+                {/* Features */}
+                <View style={styles.features}>
+                  <FeatureItem
+                    emoji="🗺️"
+                    text="Atlas AI-powered level detection"
+                  />
+                  <FeatureItem
+                    emoji="🎯"
+                    text="Support & resistance in seconds"
+                  />
+                  <FeatureItem
+                    emoji="🧘"
+                    text="Calm, focused trading"
+                  />
+                </View>
+              </View>
+
+              {/* Bottom CTA */}
+              <View style={styles.bottomSection}>
+                <Button
+                  title="Get Started"
+                  onPress={() => router.push('/(onboarding)/style')}
+                  size="lg"
+                  fullWidth
+                />
+                <Text style={styles.alreadyText}>
+                  Already have an account?{' '}
+                  <Text
+                    style={styles.signInLink}
+                    onPress={() => router.push('/(onboarding)/account')}
+                  >
+                    Sign in
+                  </Text>
+                </Text>
+                <Text style={styles.privacyText}>
+                  By continuing, you agree to our{' '}
+                  <Text
+                    style={styles.privacyLink}
+                    onPress={() => router.push('/(settings)/privacy')}
+                  >
+                    Privacy Policy
+                  </Text>
+                </Text>
+              </View>
+            </ScrollView>
+          )}
         </View>
       </View>
     </SafeAreaView>
@@ -94,17 +167,24 @@ const WEB_MAX_WIDTH = 800;
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
+    ...(Platform.OS !== 'web' && { flex: 1 }),
+    ...(Platform.OS === 'web' && { height: '100vh', overflow: 'auto' }),
     backgroundColor: colors.background,
   },
   webWrapper: {
-    flex: 1,
+    ...(Platform.OS !== 'web' && { flex: 1 }),
     ...(Platform.OS === 'web' && { alignItems: 'center' }),
   },
   webInner: {
-    flex: 1,
+    ...(Platform.OS !== 'web' && { flex: 1 }),
     width: '100%',
     ...(Platform.OS === 'web' && { maxWidth: WEB_MAX_WIDTH }),
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
   },
   gradientTop: {
     position: 'absolute',
@@ -116,9 +196,9 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   content: {
-    flex: 1,
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.xxl,
+    paddingBottom: spacing.xl,
   },
   heroSection: {
     alignItems: 'center',
@@ -191,7 +271,7 @@ const styles = StyleSheet.create({
     ...typography.bodySm,
     color: colors.neutral[500],
     textAlign: 'center',
-    marginTop: spacing.xs,
+    marginTop: spacing.sm,
   },
   privacyLink: {
     color: colors.primary[600],

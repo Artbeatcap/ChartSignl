@@ -163,8 +163,8 @@ if ($useTarFallback -or -not $rsyncAvailable) {
         exit 1
     }
     
-    # Extract on server and set permissions
-    $extractScript = "mkdir -p ${WEB_PATH} && cd ${WEB_PATH} && tar -xf ${remoteWebArchive} && rm ${remoteWebArchive} && chmod -R 755 ."
+    # Extract on server - extract contents of dist/ to root, not dist/ subfolder
+    $extractScript = "mkdir -p ${WEB_PATH} && cd ${WEB_PATH} && tar -xf ${remoteWebArchive} && cd dist && cp -r * .. && cd .. && rm -rf dist && rm ${remoteWebArchive} && chmod -R 755 ."
     if ($useWSL) {
         wsl ssh $SERVER $extractScript
     } else {
