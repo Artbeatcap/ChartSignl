@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Alert,
   Platform,
+  Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -187,14 +188,17 @@ export default function HomeScreen() {
         
         {/* Header */}
         <View style={styles.header}>
-          <View>
-            <Text style={styles.greeting}>
-              {user?.user_metadata?.display_name
-                ? `Hey, ${user.user_metadata.display_name}`
-                : 'Welcome'}
-            </Text>
-            <Text style={styles.subtitle}>Find the key levels</Text>
+          {/* Left side - Logo + Brand Name */}
+          <View style={styles.headerLeft}>
+            <Image
+              source={require('../../../assets/icon.png')}
+              style={styles.logo}
+              resizeMode="contain"
+            />
+            <Text style={styles.brandName}>ChartSignl</Text>
           </View>
+          
+          {/* Right side - Usage Badge */}
           <View style={styles.headerRight}>
             <View style={[
               styles.usageBadge,
@@ -204,7 +208,7 @@ export default function HomeScreen() {
                 styles.usageText,
                 !usage?.isPro && usage && usage.freeAnalysesUsed >= FREE_ANALYSIS_LIMIT && styles.usageTextWarning
               ]}>
-                {usage?.isPro ? '✨ Pro' : usage ? `${remainingAnalyses} left` : '...'}
+                {usage?.isPro ? '✨ Pro' : usage ? `${usage.freeAnalysesUsed}/${FREE_ANALYSIS_LIMIT} free` : '—'}
               </Text>
             </View>
             {!usage?.isPro && (
@@ -570,17 +574,23 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     marginBottom: spacing.lg,
   },
-  greeting: {
-    ...typography.headingLg,
-    color: colors.neutral[900],
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
-  subtitle: {
-    ...typography.bodyMd,
-    color: colors.neutral[500],
-    marginTop: 2,
+  logo: {
+    width: 40,
+    height: 40,
+    borderRadius: borderRadius.md,
+    marginRight: spacing.sm,
+  },
+  brandName: {
+    ...typography.headingLg,
+    color: colors.primary[600],
+    fontWeight: '600',
   },
   usageBadge: {
     backgroundColor: colors.primary[100],
