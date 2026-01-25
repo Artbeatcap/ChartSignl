@@ -1,26 +1,10 @@
-import { useEffect } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, Image, Platform } from 'react-native';
-import { useRouter } from 'expo-router';
-import { useAuthStore } from '../store/authStore';
 import { colors, typography } from '../theme';
 
 export default function IndexScreen() {
-  const router = useRouter();
-  const { isLoading, isInitialized, session } = useAuthStore();
-
-  useEffect(() => {
-    if (!isInitialized || isLoading) return;
-
-    // Navigate based on auth state
-    if (session) {
-      // User is logged in - go to main app
-      router.replace('/(tabs)/home');
-    } else {
-      // No session - show onboarding
-      router.replace('/(onboarding)/welcome');
-    }
-  }, [isInitialized, isLoading, session, router]);
-
+  // Root layout handles all navigation logic
+  // This screen just shows branding while that happens
+  
   return (
     <View style={styles.container}>
       <View style={styles.webWrapper}>

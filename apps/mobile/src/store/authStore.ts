@@ -27,7 +27,7 @@ interface AuthState {
 export const useAuthStore = create<AuthState>((set, get) => ({
   session: null,
   user: null,
-  isLoading: true,
+  isLoading: false, // Start as false, set to true when initializing
   isInitialized: false,
   isPremium: false,
   isEmailVerified: true, // Default to true until we check
@@ -40,13 +40,27 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       session,
       user: session?.user ?? null,
       isLoading: false,
+      isInitialized: true,
       isEmailVerified,
       pendingEmailVerification: session?.user && !isEmailVerified,
     });
+    
+    // If we have a user, check their subscription status
+    if (session?.user) {
+      get().checkSubscriptionStatus();
+    }
   },
 
   initialize: async () => {
-    if (get().isInitialized) return;
+    // Prevent multiple simultaneous initializations - only check isInitialized
+    if (get().isInitialized) {
+      return;
+    }
+    
+    // Prevent concurrent initialization attempts
+    if (get().isLoading) {
+      return;
+    }
     
     set({ isLoading: true });
     
@@ -58,7 +72,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         console.error('Error getting session:', error);
       }
       
-      // Check email verification status
       const isEmailVerified = !!session?.user?.email_confirmed_at;
       
       set({
@@ -73,6 +86,37 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       if (session?.user) {
         await get().checkSubscriptionStatus();
       }
+
+      // Set up auth state change listener (only once)
+      supabase.auth.onAuthStateChange(async (event, session) => {
+        console.log('Auth state change:', event);
+        
+        const isEmailVerified = !!session?.user?.email_confirmed_at;
+        
+        set({
+          session,
+          user: session?.user ?? null,
+          isEmailVerified,
+          pendingEmailVerification: session?.user && !isEmailVerified,
+        });
+
+        // Handle specific events
+        if (event === 'SIGNED_IN' && session?.user) {
+          await get().checkSubscriptionStatus();
+        } else if (event === 'SIGNED_OUT') {
+          set({ isPremium: false });
+        }
+
+        // If user just verified their email, update state
+        if (event === 'USER_UPDATED' && session?.user?.email_confirmed_at) {
+          set({ 
+            isEmailVerified: true,
+            showEmailVerificationModal: false,
+            pendingEmailVerification: false,
+          });
+        }
+      });
+      
     } catch (error) {
       console.error('Error initializing auth:', error);
       set({
@@ -83,33 +127,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         isEmailVerified: false,
       });
     }
-
-    // Listen for auth changes
-    supabase.auth.onAuthStateChange(async (event, session) => {
-      const isEmailVerified = !!session?.user?.email_confirmed_at;
-      
-      set({
-        session,
-        user: session?.user ?? null,
-        isEmailVerified,
-      });
-      
-      // Check subscription when user logs in
-      if (session?.user) {
-        await get().checkSubscriptionStatus();
-      } else {
-        set({ isPremium: false });
-      }
-
-      // If user just verified their email, update state
-      if (event === 'USER_UPDATED' && session?.user?.email_confirmed_at) {
-        set({ 
-          isEmailVerified: true,
-          showEmailVerificationModal: false,
-          pendingEmailVerification: false,
-        });
-      }
-    });
   },
 
   checkEmailVerification: async () => {

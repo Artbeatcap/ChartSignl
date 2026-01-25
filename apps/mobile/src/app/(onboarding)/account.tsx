@@ -1,48 +1,168 @@
 import { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, TextInput, Alert, Platform } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  SafeAreaView, 
+  ScrollView, 
+  TouchableOpacity, 
+  TextInput, 
+  Alert, 
+  Platform,
+  KeyboardAvoidingView,
+} from 'react-native';
+import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import * as AuthSession from 'expo-auth-session';
-import { Button, ProgressIndicator, Input } from '../../components';
+import { Button, ProgressIndicator } from '../../components';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { useAuthStore } from '../../store/authStore';
 import { supabase } from '../../lib/supabase';
 import { updateProfile } from '../../lib/api';
-import { colors, typography, spacing, borderRadius, shadows } from '../../theme';
+import { colors, typography, spacing, borderRadius } from '../../theme';
+
+const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:4000';
 
 // Complete auth session in browser
 WebBrowser.maybeCompleteAuthSession();
 
-type AuthMode = 'signup' | 'signin';
+// Auth flow states
+type AuthStep = 'email' | 'password';
+type AccountStatus = 'unknown' | 'exists' | 'new';
 
 export default function AccountScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ mode?: AuthMode }>();
   const { answers } = useOnboardingStore();
-  const { setPendingEmailVerification, setSession, user } = useAuthStore();
+  const { setPendingEmailVerification } = useAuthStore();
   
-  // Use mode from route params, default to 'signup' if not provided
-  const [mode, setMode] = useState<AuthMode>(params.mode || 'signup');
+  // Flow state
+  const [step, setStep] = useState<AuthStep>('email');
+  const [accountStatus, setAccountStatus] = useState<AccountStatus>('unknown');
+  
+  // Form state
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  
+  // UI state
   const [isLoading, setIsLoading] = useState(false);
+  const [isCheckingEmail, setIsCheckingEmail] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
+  // Refs
   const passwordInputRef = useRef<TextInput>(null);
-  
-  // Watch for auth success via onAuthStateChange
-  useEffect(() => {
-    if (isLoading && user) {
-      // User authenticated successfully, navigate away immediately
-      console.log('[AccountScreen] User detected, navigating to home');
-      setIsLoading(false);
-      router.replace('/(tabs)/home');
-    }
-  }, [isLoading, user, router]);
+  const confirmPasswordInputRef = useRef<TextInput>(null);
 
-  const handleEmailAuth = async () => {
-    if (!email.trim() || !password.trim()) {
-      setError('Please enter email and password');
+  // Focus password field when moving to password step
+  useEffect(() => {
+    if (step === 'password') {
+      setTimeout(() => passwordInputRef.current?.focus(), 100);
+    }
+  }, [step]);
+
+  // Check if email exists in the system
+  // Prefers backend endpoint (more reliable), falls back to client-side method
+  const checkEmailExists = async (emailToCheck: string): Promise<boolean> => {
+    try {
+      // Try backend endpoint first (more reliable, avoids rate limiting)
+      try {
+        const response = await fetch(`${API_URL}/api/auth/check-email`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: emailToCheck }),
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          return data.exists === true;
+        }
+      } catch (backendError) {
+        console.log('Backend email check failed, falling back to client-side method:', backendError);
+        // Fall through to client-side method
+      }
+
+      // Fallback: Use Supabase's signInWithPassword to check if user exists
+      // This doesn't actually sign in, but tells us if user exists based on error
+      const { error } = await supabase.auth.signInWithPassword({
+        email: emailToCheck,
+        password: '___CHECK_ONLY___', // Intentionally wrong
+      });
+      
+      if (error) {
+        // "Invalid login credentials" = user exists but wrong password
+        // "User not found" or similar = user doesn't exist
+        const errorMsg = error.message.toLowerCase();
+        
+        if (errorMsg.includes('invalid login credentials') || 
+            errorMsg.includes('invalid credentials')) {
+          // User exists
+          return true;
+        }
+        
+        if (errorMsg.includes('user not found') || 
+            errorMsg.includes('no user found') ||
+            errorMsg.includes('email not confirmed')) {
+          // User doesn't exist or unconfirmed
+          return false;
+        }
+        
+        // For other errors, assume user might exist to be safe
+        // This prevents account enumeration attacks
+        console.log('Email check error:', error.message);
+        return false;
+      }
+      
+      // Shouldn't get here, but if we do, user exists
+      return true;
+    } catch (err) {
+      console.error('Error checking email:', err);
+      return false;
+    }
+  };
+
+  // Handle email submission - check if account exists
+  const handleEmailSubmit = async () => {
+    const trimmedEmail = email.trim().toLowerCase();
+    
+    if (!trimmedEmail) {
+      setError('Please enter your email');
+      return;
+    }
+    
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(trimmedEmail)) {
+      setError('Please enter a valid email address');
+      return;
+    }
+    
+    setIsCheckingEmail(true);
+    setError(null);
+    
+    try {
+      const exists = await checkEmailExists(trimmedEmail);
+      setAccountStatus(exists ? 'exists' : 'new');
+      setStep('password');
+    } catch (err) {
+      setError('Unable to verify email. Please try again.');
+    } finally {
+      setIsCheckingEmail(false);
+    }
+  };
+
+  // Handle going back to email step
+  const handleBackToEmail = () => {
+    setStep('email');
+    setAccountStatus('unknown');
+    setPassword('');
+    setConfirmPassword('');
+    setError(null);
+  };
+
+  // Handle sign in (existing user)
+  const handleSignIn = async () => {
+    if (!password.trim()) {
+      setError('Please enter your password');
       return;
     }
 
@@ -50,170 +170,122 @@ export default function AccountScreen() {
     setError(null);
 
     try {
-      if (mode === 'signup') {
-        // Add timeout to prevent hanging on sign-up
-        const signUpPromise = supabase.auth.signUp({
-          email,
-          password,
-        });
-        
-        const timeoutPromise = new Promise<never>((_, reject) => 
-          setTimeout(() => reject(new Error('Sign-up timeout - please try again')), 10000)
-        );
-        
-        const { data, error: signUpError } = await Promise.race([
-          signUpPromise,
-          timeoutPromise
-        ]).catch(err => {
-          throw new Error(err.message || 'Sign-up failed');
-        });
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+        email: email.trim().toLowerCase(),
+        password,
+      });
 
-        // Handle signup errors - if user was created but email failed, allow continuation
-        if (signUpError) {
-          // If user was created but email sending failed, allow user to continue
-          // They can verify email later via the resend button
-          if (data?.user && (signUpError.message?.includes('confirmation email') || signUpError.message?.includes('Error sending'))) {
-            // Continue with user creation flow - user can resend email later
-            // Don't throw error, proceed to user creation flow below
-          } else {
-            // Other errors should still be thrown
-            throw signUpError;
-          }
+      if (signInError) throw signInError;
+
+      if (data.user) {
+        // Check if user needs email verification
+        if (!data.user.email_confirmed_at) {
+          setPendingEmailVerification(true);
         }
-
-        if (data.user) {
-          // Check if email confirmation is required (no session means confirmation needed)
-          const needsEmailVerification = !data.session;
-          
-          // If we have a session, update the auth store immediately
-          if (data.session) {
-            // CRITICAL: Explicitly update the auth store
-            setSession(data.session);
-            
-            // Small delay for state propagation
-            await new Promise(resolve => setTimeout(resolve, 100));
-            
-            // Save onboarding data to profile with retry logic
-            let profileCreated = false;
-            let retries = 0;
-            const maxRetries = 3;
-            
-            while (!profileCreated && retries < maxRetries) {
-              try {
-                await updateProfile({
-                  display_name: answers.displayName,
-                  trading_style: answers.tradingStyle,
-                  experience_level: answers.experienceLevel,
-                  stress_reducer: answers.stressReducer,
-                  onboarding_completed: true,
-                });
-                profileCreated = true;
-                console.log('Profile created successfully');
-              } catch (profileError: any) {
-                retries++;
-                console.error(`Failed to update profile (attempt ${retries}/${maxRetries}):`, profileError);
-                
-                if (retries < maxRetries) {
-                  // Wait before retry
-                  await new Promise(resolve => setTimeout(resolve, 1000 * retries));
-                } else {
-                  // Final attempt failed - log but continue
-                  console.error('Profile creation failed after retries, user can update profile later');
-                }
-              }
-            }
-          } else {
-            // No session yet - profile will be created after email verification
-            console.log('User created but email verification required, profile will be created after verification');
-          }
-
-          // Set pending email verification flag if needed, then navigate to home
-          if (needsEmailVerification) {
-            setPendingEmailVerification(true);
-          }
-          
-          // Navigate to home - user can use app with or without verification
-          router.replace('/(tabs)/home');
-        }
-      } else {
-        // Sign-in mode: Start the sign-in but don't wait for it
-        // The onAuthStateChange listener will update the store, and useEffect will navigate
-        console.log('[AccountScreen] Starting sign-in');
-        
-        supabase.auth.signInWithPassword({
-          email,
-          password,
-        }).then(result => {
-          console.log('[AccountScreen] signInWithPassword resolved:', !!result.data.session);
-          if (result.error) {
-            console.error('[AccountScreen] Sign-in error:', result.error.message);
-            setError(result.error.message);
-            setIsLoading(false);
-          }
-        }).catch(err => {
-          console.error('[AccountScreen] Sign-in caught error:', err);
-          setError(err instanceof Error ? err.message : 'Sign-in failed');
-          setIsLoading(false);
-        });
-        
-        // Set a timeout to catch if sign-in takes too long
-        setTimeout(() => {
-          if (isLoading) {
-            console.warn('[AccountScreen] Sign-in timeout after 8 seconds');
-            setError('Sign-in is taking longer than expected. Please try again.');
-            setIsLoading(false);
-          }
-        }, 8000);
-        
-        // Exit early - don't throw or navigate here, let useEffect handle it
-        return;
+        // Navigation handled by root layout auth gate
       }
     } catch (err) {
-      console.error('[AccountScreen] handleEmailAuth error:', err);
-      let errorMessage = err instanceof Error ? err.message : 'Authentication failed';
+      const errorMessage = err instanceof Error ? err.message : 'Sign in failed';
       
-      // Provide more helpful error message for email configuration issues
+      if (errorMessage.toLowerCase().includes('invalid login credentials')) {
+        setError('Incorrect password. Please try again.');
+      } else {
+        setError(errorMessage);
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Handle sign up (new user)
+  const handleSignUp = async () => {
+    if (!password.trim()) {
+      setError('Please enter a password');
+      return;
+    }
+    
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters');
+      return;
+    }
+    
+    if (password !== confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email: email.trim().toLowerCase(),
+        password,
+      });
+
+      if (signUpError) {
+        // Check if user already exists (race condition or email check was wrong)
+        if (signUpError.message.toLowerCase().includes('already registered') ||
+            signUpError.message.toLowerCase().includes('already exists')) {
+          setAccountStatus('exists');
+          setConfirmPassword('');
+          setError('This email is already registered. Please sign in instead.');
+          return;
+        }
+        throw signUpError;
+      }
+
+      if (data.user) {
+        // Check if email confirmation is required
+        if (!data.user.email_confirmed_at) {
+          setPendingEmailVerification(true);
+        }
+
+        // Save onboarding preferences to profile
+        try {
+          await updateProfile({
+            tradingStyle: answers.tradingStyle,
+            experienceLevel: answers.experienceLevel,
+          });
+        } catch (profileError) {
+          console.warn('Failed to save profile preferences:', profileError);
+          // Don't block auth flow for profile save failure
+        }
+
+        // Navigation handled by root layout auth gate
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Sign up failed';
+      
+      // Handle email configuration issues
       if (errorMessage.includes('confirmation email') || errorMessage.includes('Error sending')) {
-        const detailedMessage = 'Email verification is misconfigured in Supabase.\n\nTo fix:\n1. Go to Supabase Dashboard > Authentication > Settings\n2. Either disable "Enable email confirmations", OR\n3. Configure SMTP under Authentication > Email Templates\n\nFor development, disabling email confirmations is recommended.';
-        
-        // Show detailed error in Alert for better visibility (works on mobile)
-        // On web, Alert.alert may not work reliably, so we'll also set the error text
         if (Platform.OS !== 'web') {
           Alert.alert(
             'Email Configuration Error',
-            detailedMessage,
+            'Email verification is not configured. Please contact support.',
             [{ text: 'OK' }]
           );
-          setError('Email configuration error - see Alert above');
-        } else {
-          // On web, show the full message in the error text
-          setError(detailedMessage);
         }
-        
-        return; // Don't set the error text again since we already set it
+        setError('Email service unavailable. Please try again later.');
+        return;
       }
       
       setError(errorMessage);
     } finally {
-      // Only clear loading for sign-up (sign-in uses async flow with useEffect)
-      if (mode === 'signup') {
-        setIsLoading(false);
-      }
+      setIsLoading(false);
     }
   };
 
+  // Handle social auth (Google/Apple)
   const handleSocialAuth = async (provider: 'google' | 'apple') => {
     setIsLoading(true);
     setError(null);
 
     try {
-      // Create redirect URL using expo-auth-session
       const redirectUrl = AuthSession.makeRedirectUri({
         scheme: 'chartsignl',
         path: 'auth/callback',
       });
-
-      console.log('OAuth Redirect URL:', redirectUrl); // For debugging
 
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider,
@@ -225,31 +297,23 @@ export default function AccountScreen() {
 
       if (error) throw error;
 
-      // If we get a URL back, open it in the browser
-      // The browser will redirect back to our app with the tokens
       if (data?.url) {
         const result = await WebBrowser.openAuthSessionAsync(
           data.url,
           redirectUrl
         );
 
-        // Handle the result - if user cancels, reset loading state
         if (result.type === 'cancel') {
           setIsLoading(false);
           return;
         }
-
-        // The callback handler will process the result
-        // We don't need to do anything else here
       }
     } catch (err) {
       let errorMessage = 'Authentication failed';
       
       if (err instanceof Error) {
         if (err.message.includes('Provider not enabled')) {
-          errorMessage = 'This sign-in method is not configured yet. Please contact support or use email sign-in.';
-        } else if (err.message.includes('redirect') || err.message.includes('Redirect')) {
-          errorMessage = 'OAuth redirect not configured. Check Supabase settings.';
+          errorMessage = `${provider === 'google' ? 'Google' : 'Apple'} sign-in is not configured yet.`;
         } else {
           errorMessage = err.message;
         }
@@ -260,203 +324,431 @@ export default function AccountScreen() {
     }
   };
 
+  // Handle forgot password
+  const handleForgotPassword = async () => {
+    if (!email.trim()) {
+      setError('Please enter your email first');
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
+        redirectTo: AuthSession.makeRedirectUri({
+          scheme: 'chartsignl',
+          path: 'auth/reset-password',
+        }),
+      });
+
+      if (error) throw error;
+
+      Alert.alert(
+        'Check Your Email',
+        'We sent you a password reset link. Please check your inbox.',
+        [{ text: 'OK' }]
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to send reset email');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Render email step
+  const renderEmailStep = () => (
+    <>
+      <Text style={styles.title}>Welcome to ChartSignl</Text>
+      <Text style={styles.subtitle}>
+        Enter your email to sign in or create an account
+      </Text>
+
+      {/* Email Input */}
+      <View style={styles.inputContainer}>
+        <Text style={styles.inputLabel}>Email</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="you@example.com"
+          placeholderTextColor={colors.neutral[400]}
+          value={email}
+          onChangeText={(text) => {
+            setEmail(text);
+            setError(null);
+          }}
+          keyboardType="email-address"
+          autoCapitalize="none"
+          autoCorrect={false}
+          autoComplete="email"
+          returnKeyType="next"
+          onSubmitEditing={handleEmailSubmit}
+          editable={!isCheckingEmail}
+        />
+      </View>
+
+      {/* Error Message */}
+      {error && <Text style={styles.errorText}>{error}</Text>}
+
+      {/* Continue Button */}
+      <Button
+        title={isCheckingEmail ? 'Checking...' : 'Continue'}
+        onPress={handleEmailSubmit}
+        disabled={isCheckingEmail || !email.trim()}
+        style={styles.primaryButton}
+      />
+
+      {/* Divider */}
+      <View style={styles.divider}>
+        <View style={styles.dividerLine} />
+        <Text style={styles.dividerText}>or continue with</Text>
+        <View style={styles.dividerLine} />
+      </View>
+
+      {/* Social Auth Buttons */}
+      <View style={styles.socialButtons}>
+        <TouchableOpacity
+          style={styles.socialButton}
+          onPress={() => handleSocialAuth('google')}
+          disabled={isLoading}
+        >
+          <Text style={styles.socialButtonIcon}>G</Text>
+          <Text style={styles.socialButtonText}>Google</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.socialButton}
+          onPress={() => handleSocialAuth('apple')}
+          disabled={isLoading}
+        >
+          <Text style={styles.socialButtonIcon}>🍎</Text>
+          <Text style={styles.socialButtonText}>Apple</Text>
+        </TouchableOpacity>
+      </View>
+    </>
+  );
+
+  // Render password step (existing user - sign in)
+  const renderSignInStep = () => (
+    <>
+      <TouchableOpacity onPress={handleBackToEmail} style={styles.backButton}>
+        <Text style={styles.backButtonText}>← Back</Text>
+      </TouchableOpacity>
+
+      <Text style={styles.title}>Welcome back!</Text>
+      <Text style={styles.subtitle}>
+        Enter your password to sign in as{'\n'}
+        <Text style={styles.emailHighlight}>{email}</Text>
+      </Text>
+
+      {/* Password Input */}
+      <View style={styles.inputContainer}>
+        <Text style={styles.inputLabel}>Password</Text>
+        <TextInput
+          ref={passwordInputRef}
+          style={styles.input}
+          placeholder="Enter your password"
+          placeholderTextColor={colors.neutral[400]}
+          value={password}
+          onChangeText={(text) => {
+            setPassword(text);
+            setError(null);
+          }}
+          secureTextEntry
+          autoCapitalize="none"
+          autoComplete="password"
+          returnKeyType="done"
+          onSubmitEditing={handleSignIn}
+          editable={!isLoading}
+        />
+      </View>
+
+      {/* Forgot Password */}
+      <TouchableOpacity onPress={handleForgotPassword} disabled={isLoading}>
+        <Text style={styles.forgotPassword}>Forgot password?</Text>
+      </TouchableOpacity>
+
+      {/* Error Message */}
+      {error && <Text style={styles.errorText}>{error}</Text>}
+
+      {/* Sign In Button */}
+      <Button
+        title={isLoading ? 'Signing in...' : 'Sign In'}
+        onPress={handleSignIn}
+        disabled={isLoading || !password.trim()}
+        style={styles.primaryButton}
+      />
+
+      {/* Divider */}
+      <View style={styles.divider}>
+        <View style={styles.dividerLine} />
+        <Text style={styles.dividerText}>or continue with</Text>
+        <View style={styles.dividerLine} />
+      </View>
+
+      {/* Social Auth Buttons */}
+      <View style={styles.socialButtons}>
+        <TouchableOpacity
+          style={styles.socialButton}
+          onPress={() => handleSocialAuth('google')}
+          disabled={isLoading}
+        >
+          <Text style={styles.socialButtonIcon}>G</Text>
+          <Text style={styles.socialButtonText}>Google</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.socialButton}
+          onPress={() => handleSocialAuth('apple')}
+          disabled={isLoading}
+        >
+          <Text style={styles.socialButtonIcon}>🍎</Text>
+          <Text style={styles.socialButtonText}>Apple</Text>
+        </TouchableOpacity>
+      </View>
+    </>
+  );
+
+  // Render password step (new user - sign up)
+  const renderSignUpStep = () => (
+    <>
+      <TouchableOpacity onPress={handleBackToEmail} style={styles.backButton}>
+        <Text style={styles.backButtonText}>← Back</Text>
+      </TouchableOpacity>
+
+      <Text style={styles.title}>Create your account</Text>
+      <Text style={styles.subtitle}>
+        Set a password for{'\n'}
+        <Text style={styles.emailHighlight}>{email}</Text>
+      </Text>
+
+      {/* Password Input */}
+      <View style={styles.inputContainer}>
+        <Text style={styles.inputLabel}>Password</Text>
+        <TextInput
+          ref={passwordInputRef}
+          style={styles.input}
+          placeholder="Create a password (min 6 characters)"
+          placeholderTextColor={colors.neutral[400]}
+          value={password}
+          onChangeText={(text) => {
+            setPassword(text);
+            setError(null);
+          }}
+          secureTextEntry
+          autoCapitalize="none"
+          autoComplete="new-password"
+          returnKeyType="next"
+          onSubmitEditing={() => confirmPasswordInputRef.current?.focus()}
+          editable={!isLoading}
+        />
+      </View>
+
+      {/* Confirm Password Input */}
+      <View style={styles.inputContainer}>
+        <Text style={styles.inputLabel}>Confirm Password</Text>
+        <TextInput
+          ref={confirmPasswordInputRef}
+          style={styles.input}
+          placeholder="Re-enter your password"
+          placeholderTextColor={colors.neutral[400]}
+          value={confirmPassword}
+          onChangeText={(text) => {
+            setConfirmPassword(text);
+            setError(null);
+          }}
+          secureTextEntry
+          autoCapitalize="none"
+          autoComplete="new-password"
+          returnKeyType="done"
+          onSubmitEditing={handleSignUp}
+          editable={!isLoading}
+        />
+      </View>
+
+      {/* Error Message */}
+      {error && <Text style={styles.errorText}>{error}</Text>}
+
+      {/* Create Account Button */}
+      <Button
+        title={isLoading ? 'Creating account...' : 'Create Account'}
+        onPress={handleSignUp}
+        disabled={isLoading || !password.trim() || !confirmPassword.trim()}
+        style={styles.primaryButton}
+      />
+
+      {/* Divider */}
+      <View style={styles.divider}>
+        <View style={styles.dividerLine} />
+        <Text style={styles.dividerText}>or continue with</Text>
+        <View style={styles.dividerLine} />
+      </View>
+
+      {/* Social Auth Buttons */}
+      <View style={styles.socialButtons}>
+        <TouchableOpacity
+          style={styles.socialButton}
+          onPress={() => handleSocialAuth('google')}
+          disabled={isLoading}
+        >
+          <Text style={styles.socialButtonIcon}>G</Text>
+          <Text style={styles.socialButtonText}>Google</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.socialButton}
+          onPress={() => handleSocialAuth('apple')}
+          disabled={isLoading}
+        >
+          <Text style={styles.socialButtonIcon}>🍎</Text>
+          <Text style={styles.socialButtonText}>Apple</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Terms */}
+      <Text style={styles.termsText}>
+        By creating an account, you agree to our{' '}
+        <Text style={styles.termsLink} onPress={() => router.push('/(settings)/terms')}>
+          Terms of Service
+        </Text>{' '}
+        and{' '}
+        <Text style={styles.termsLink} onPress={() => router.push('/(settings)/privacy')}>
+          Privacy Policy
+        </Text>
+      </Text>
+    </>
+  );
+
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.webWrapper}>
-        <View style={styles.webInner}>
-          {/* Header */}
-          <View style={styles.header}>
-            <TouchableOpacity onPress={() => router.back()}>
-              <Text style={styles.backButton}>←</Text>
-            </TouchableOpacity>
-            {mode === 'signup' && <ProgressIndicator current={4} total={4} />}
-          </View>
-
-          <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.keyboardView}
       >
-        {/* Title */}
-        <View style={styles.titleSection}>
-          <Text style={styles.title}>
-            {mode === 'signup' ? 'Create your account' : 'Welcome back'}
-          </Text>
-          <Text style={styles.subtitle}>
-            {mode === 'signup'
-              ? 'Save your progress and unlock all features'
-              : 'Sign in to continue your journey'}
-          </Text>
+        <View style={styles.webWrapper}>
+          <View style={styles.webInner}>
+            {/* Progress Indicator - only show during onboarding */}
+            <View style={styles.progressContainer}>
+              <ProgressIndicator current={5} total={5} />
+            </View>
+
+            <ScrollView 
+              style={styles.scrollView}
+              contentContainerStyle={styles.scrollContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              {step === 'email' && renderEmailStep()}
+              {step === 'password' && accountStatus === 'exists' && renderSignInStep()}
+              {step === 'password' && accountStatus === 'new' && renderSignUpStep()}
+            </ScrollView>
+          </View>
         </View>
-
-        {/* Social auth buttons */}
-        <View style={styles.socialButtons}>
-          <TouchableOpacity
-            style={styles.socialButton}
-            onPress={() => handleSocialAuth('google')}
-            disabled={isLoading}
-          >
-            <Text style={styles.socialIcon}>G</Text>
-            <Text style={styles.socialButtonText}>Continue with Google</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.socialButton}
-            onPress={() => handleSocialAuth('apple')}
-            disabled={isLoading}
-          >
-            <Text style={styles.socialIcon}></Text>
-            <Text style={styles.socialButtonText}>Continue with Apple</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Divider */}
-        <View style={styles.divider}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.dividerText}>or</Text>
-          <View style={styles.dividerLine} />
-        </View>
-
-        {/* Email form */}
-        <View style={styles.form}>
-          <Input
-            label="Email"
-            placeholder="your@email.com"
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoComplete="email"
-            returnKeyType="next"
-            onSubmitEditing={() => passwordInputRef.current?.focus()}
-          />
-          
-          <Input
-            ref={passwordInputRef}
-            label="Password"
-            placeholder="••••••••"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            autoCapitalize="none"
-            containerStyle={{ marginTop: spacing.md }}
-            returnKeyType="go"
-            onSubmitEditing={handleEmailAuth}
-          />
-
-          {error && (
-            <Text style={styles.errorText}>{error}</Text>
-          )}
-
-          <Button
-            title={mode === 'signup' ? 'Create Account' : 'Sign In'}
-            onPress={handleEmailAuth}
-            size="lg"
-            fullWidth
-            loading={isLoading}
-            style={{ marginTop: spacing.lg }}
-          />
-        </View>
-
-        {/* Toggle mode */}
-        <View style={styles.toggleMode}>
-          <Text style={styles.toggleText}>
-            {mode === 'signup' ? 'Already have an account?' : "Don't have an account?"}
-          </Text>
-          <TouchableOpacity onPress={() => setMode(mode === 'signup' ? 'signin' : 'signup')}>
-            <Text style={styles.toggleLink}>
-              {mode === 'signup' ? 'Sign in' : 'Sign up'}
-            </Text>
-          </TouchableOpacity>
-        </View>
-          </ScrollView>
-        </View>
-      </View>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
-const WEB_MAX_WIDTH = 600;
+const WEB_MAX_WIDTH = 480;
 
 const styles = StyleSheet.create({
   container: {
-    ...(Platform.OS !== 'web' && { flex: 1 }),
-    ...(Platform.OS === 'web' && { height: '100vh', overflow: 'auto' }),
+    flex: 1,
     backgroundColor: colors.background,
   },
+  keyboardView: {
+    flex: 1,
+  },
   webWrapper: {
-    ...(Platform.OS !== 'web' && { flex: 1 }),
-    ...(Platform.OS === 'web' && {
-      alignItems: 'center',
-      paddingTop: 40,
-    }),
+    flex: 1,
+    width: '100%',
+    ...(Platform.OS === 'web' && { alignItems: 'center' }),
   },
   webInner: {
-    ...(Platform.OS !== 'web' && { flex: 1 }),
+    flex: 1,
     width: '100%',
     ...(Platform.OS === 'web' && { maxWidth: WEB_MAX_WIDTH }),
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  progressContainer: {
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    gap: spacing.md,
-  },
-  backButton: {
-    fontSize: 24,
-    color: colors.neutral[600],
-    width: 40,
+    paddingTop: spacing.md,
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
     paddingHorizontal: spacing.lg,
-    paddingBottom: Platform.OS === 'web' ? spacing.xxl * 3 : spacing.xl,
+    paddingTop: spacing.xl,
+    paddingBottom: spacing.xxl,
   },
-  titleSection: {
-    marginBottom: spacing.xl,
+  // Back button
+  backButton: {
+    marginBottom: spacing.md,
   },
+  backButtonText: {
+    ...typography.bodyMd,
+    color: colors.primary[600],
+    fontWeight: '600',
+  },
+  // Headers
   title: {
-    ...typography.displaySm,
+    ...typography.displayMd,
     color: colors.neutral[900],
     marginBottom: spacing.sm,
   },
   subtitle: {
     ...typography.bodyLg,
-    color: colors.neutral[500],
+    color: colors.neutral[600],
+    marginBottom: spacing.xl,
+    lineHeight: 24,
   },
-  socialButtons: {
-    gap: spacing.sm,
-    marginBottom: spacing.lg,
+  emailHighlight: {
+    color: colors.primary[600],
+    fontWeight: '600',
   },
-  socialButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+  // Input styles
+  inputContainer: {
+    marginBottom: spacing.md,
+  },
+  inputLabel: {
+    ...typography.labelMd,
+    color: colors.neutral[700],
+    marginBottom: spacing.xs,
+  },
+  input: {
+    height: 52,
     backgroundColor: colors.surface,
     borderWidth: 2,
     borderColor: colors.neutral[200],
     borderRadius: borderRadius.lg,
-    height: 52,
-    gap: spacing.sm,
-    ...shadows.sm,
+    paddingHorizontal: spacing.md,
+    ...typography.bodyMd,
+    color: colors.neutral[900],
   },
-  socialIcon: {
-    fontSize: 18,
-    fontWeight: '600',
+  // Forgot password
+  forgotPassword: {
+    ...typography.bodySm,
+    color: colors.primary[600],
+    fontWeight: '500',
+    textAlign: 'right',
+    marginBottom: spacing.md,
   },
-  socialButtonText: {
-    ...typography.labelLg,
-    color: colors.neutral[700],
+  // Error
+  errorText: {
+    ...typography.bodySm,
+    color: colors.error,
+    marginBottom: spacing.md,
+    textAlign: 'center',
   },
+  // Primary button
+  primaryButton: {
+    marginTop: spacing.sm,
+    marginBottom: spacing.lg,
+  },
+  // Divider
   divider: {
     flexDirection: 'row',
     alignItems: 'center',
     marginVertical: spacing.lg,
-    gap: spacing.md,
   },
   dividerLine: {
     flex: 1,
@@ -465,29 +757,46 @@ const styles = StyleSheet.create({
   },
   dividerText: {
     ...typography.bodySm,
-    color: colors.neutral[400],
-  },
-  form: {
-    marginBottom: spacing.lg,
-  },
-  errorText: {
-    ...typography.bodySm,
-    color: colors.error,
-    marginTop: spacing.sm,
-  },
-  toggleMode: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  toggleText: {
-    ...typography.bodyMd,
     color: colors.neutral[500],
+    paddingHorizontal: spacing.md,
   },
-  toggleLink: {
+  // Social buttons
+  socialButtons: {
+    flexDirection: 'row',
+    gap: spacing.md,
+  },
+  socialButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 52,
+    backgroundColor: colors.surface,
+    borderWidth: 2,
+    borderColor: colors.neutral[200],
+    borderRadius: borderRadius.lg,
+    gap: spacing.sm,
+  },
+  socialButtonIcon: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.neutral[700],
+  },
+  socialButtonText: {
     ...typography.bodyMd,
-    color: colors.primary[600],
+    color: colors.neutral[700],
     fontWeight: '600',
+  },
+  // Terms
+  termsText: {
+    ...typography.bodySm,
+    color: colors.neutral[500],
+    textAlign: 'center',
+    marginTop: spacing.lg,
+    lineHeight: 20,
+  },
+  termsLink: {
+    color: colors.primary[600],
+    fontWeight: '500',
   },
 });
