@@ -120,20 +120,9 @@ export default function HomeScreen() {
       return;
     }
 
-    // Check usage limits - improved messaging
+    // Check usage limits - navigate directly to premium screen
     if (!usage.isPro && usage.freeAnalysesUsed >= FREE_ANALYSIS_LIMIT) {
-      Alert.alert(
-        '🔒 Free Limit Reached',
-        `You've used all ${FREE_ANALYSIS_LIMIT} free Atlas analyses. Upgrade to Pro for unlimited analyses, plus faster updates and priority support!`,
-        [
-          { text: 'Maybe Later', style: 'cancel' },
-          {
-            text: '✨ Upgrade to Pro',
-            onPress: () => router.push('/(tabs)/profile'),
-            style: 'default',
-          },
-        ]
-      );
+      router.push('/premium');
       return;
     }
 
@@ -151,10 +140,32 @@ export default function HomeScreen() {
     } catch (err) {
       console.error('Atlas analysis error:', err);
       const errorMsg = err instanceof Error ? err.message : 'Please try again';
+      
+      // Check if error is related to limit reached
+      const isLimitError = errorMsg.toLowerCase().includes('limit') || 
+                           errorMsg.toLowerCase().includes('upgrade') ||
+                           errorMsg.toLowerCase().includes('free tier');
+      
       setErrorMessage(errorMsg); // Set error message for web display
+      
       // Show alert on native platforms only
       if (Platform.OS !== 'web') {
-        Alert.alert('Analysis Failed', errorMsg);
+        if (isLimitError) {
+          Alert.alert(
+            '🔒 Free Limit Reached',
+            errorMsg,
+            [
+              { text: 'Maybe Later', style: 'cancel' },
+              {
+                text: '✨ Upgrade to Pro',
+                onPress: () => router.push('/premium'),
+                style: 'default',
+              },
+            ]
+          );
+        } else {
+          Alert.alert('Analysis Failed', errorMsg);
+        }
       }
     } finally {
       setIsAnalyzing(false);
@@ -386,6 +397,18 @@ export default function HomeScreen() {
           {errorMessage && (
             <View style={styles.errorBanner}>
               <Text style={styles.errorText}>⚠️ {errorMessage}</Text>
+              {(errorMessage.toLowerCase().includes('limit') || 
+                errorMessage.toLowerCase().includes('upgrade') ||
+                errorMessage.toLowerCase().includes('free tier')) && (
+                <Button
+                  title="Upgrade for More"
+                  onPress={() => router.push('/premium')}
+                  variant="primary"
+                  size="sm"
+                  fullWidth
+                  style={styles.errorUpgradeButton}
+                />
+              )}
             </View>
           )}
           <Text style={[
@@ -817,6 +840,10 @@ const styles = StyleSheet.create({
     ...typography.bodySm,
     color: colors.red[700],
     textAlign: 'center',
+    marginBottom: spacing.xs,
+  },
+  errorUpgradeButton: {
+    marginTop: spacing.sm,
   },
   // Analysis card
   analysisCard: {
