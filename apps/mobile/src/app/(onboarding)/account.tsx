@@ -14,7 +14,7 @@ import {
 import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import * as AuthSession from 'expo-auth-session';
-import { Button, ProgressIndicator } from '../../components';
+import { Button, ProgressIndicator, GoogleLogo, AppleLogo } from '../../components';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { useAuthStore } from '../../store/authStore';
 import { supabase } from '../../lib/supabase';
@@ -411,7 +411,7 @@ export default function AccountScreen() {
           onPress={() => handleSocialAuth('google')}
           disabled={isLoading}
         >
-          <Text style={styles.socialButtonIcon}>G</Text>
+          <GoogleLogo size={18} />
           <Text style={styles.socialButtonText}>Google</Text>
         </TouchableOpacity>
 
@@ -420,7 +420,7 @@ export default function AccountScreen() {
           onPress={() => handleSocialAuth('apple')}
           disabled={isLoading}
         >
-          <Text style={styles.socialButtonIcon}>🍎</Text>
+          <AppleLogo size={18} />
           <Text style={styles.socialButtonText}>Apple</Text>
         </TouchableOpacity>
       </View>
@@ -492,7 +492,7 @@ export default function AccountScreen() {
           onPress={() => handleSocialAuth('google')}
           disabled={isLoading}
         >
-          <Text style={styles.socialButtonIcon}>G</Text>
+          <GoogleLogo size={18} />
           <Text style={styles.socialButtonText}>Google</Text>
         </TouchableOpacity>
 
@@ -501,7 +501,7 @@ export default function AccountScreen() {
           onPress={() => handleSocialAuth('apple')}
           disabled={isLoading}
         >
-          <Text style={styles.socialButtonIcon}>🍎</Text>
+          <AppleLogo size={18} />
           <Text style={styles.socialButtonText}>Apple</Text>
         </TouchableOpacity>
       </View>
@@ -590,7 +590,7 @@ export default function AccountScreen() {
           onPress={() => handleSocialAuth('google')}
           disabled={isLoading}
         >
-          <Text style={styles.socialButtonIcon}>G</Text>
+          <GoogleLogo size={18} />
           <Text style={styles.socialButtonText}>Google</Text>
         </TouchableOpacity>
 
@@ -599,7 +599,7 @@ export default function AccountScreen() {
           onPress={() => handleSocialAuth('apple')}
           disabled={isLoading}
         >
-          <Text style={styles.socialButtonIcon}>🍎</Text>
+          <AppleLogo size={18} />
           <Text style={styles.socialButtonText}>Apple</Text>
         </TouchableOpacity>
       </View>
