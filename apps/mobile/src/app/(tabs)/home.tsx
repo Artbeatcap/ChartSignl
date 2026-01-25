@@ -549,14 +549,15 @@ function EnhancedLevelRow({ level, type }: { level: ScoredLevel; type: 'support'
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
+    ...(Platform.OS !== 'web' && { flex: 1 }),
+    ...(Platform.OS === 'web' && { height: '100vh', overflow: 'auto' }),
     backgroundColor: colors.background,
   },
   webWrapper: {
-    flex: 1,
+    ...(Platform.OS !== 'web' && { flex: 1 }),
   },
   webInner: {
-    flex: 1,
+    ...(Platform.OS !== 'web' && { flex: 1 }),
     width: '100%',
   },
   scrollView: {
@@ -564,7 +565,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: spacing.lg,
-    paddingBottom: spacing.xxl,
+    paddingBottom: Platform.OS === 'web' ? spacing.xxl * 3 : spacing.xxl,
   },
   header: {
     flexDirection: 'row',

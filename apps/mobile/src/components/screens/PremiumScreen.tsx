@@ -100,7 +100,7 @@ const COMPARISON_DATA: ComparisonItem[] = [
 export default function PremiumScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ success?: string; canceled?: string }>();
-  const { refreshSubscription, user, isPremium } = useAuthStore();
+  const { refreshSubscription, user, isPremium, session, isInitialized, isLoading: authLoading } = useAuthStore();
   const [offerings, setOfferings] = useState<PurchasesOffering | null>(null);
   const [selectedPackage, setSelectedPackage] = useState<PurchasesPackage | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -188,7 +188,13 @@ export default function PremiumScreen() {
   };
 
   const handlePurchase = async () => {
-    if (!user) {
+    // Check if we have a session but user is not yet loaded - try to get user from session
+    let currentUser = user;
+    if (!currentUser && session?.user) {
+      currentUser = session.user;
+    }
+    
+    if (!currentUser) {
       Alert.alert(
         'Login Required',
         'You must be logged in to purchase a subscription. Please sign in or create an account first.',
@@ -207,10 +213,15 @@ export default function PremiumScreen() {
     if (Platform.OS === 'web') {
       try {
         setIsPurchasing(true);
-        const result = await subscriptionService.purchaseSubscription(undefined, user.id);
+        const result = await subscriptionService.purchaseSubscription(undefined, currentUser.id);
         if (result.checkoutUrl) {
           // Redirect to Stripe checkout
-          await Linking.openURL(result.checkoutUrl);
+          // On web, use window.location instead of Linking.openURL
+          if (Platform.OS === 'web' && typeof window !== 'undefined') {
+            window.location.href = result.checkoutUrl;
+          } else {
+            await Linking.openURL(result.checkoutUrl);
+          }
         } else {
           Alert.alert(
             'Checkout Error',
@@ -660,15 +671,16 @@ const WEB_MAX_WIDTH = 900;
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
+    ...(Platform.OS !== 'web' && { flex: 1 }),
+    ...(Platform.OS === 'web' && { height: '100vh', overflow: 'auto' }),
     backgroundColor: colors.background,
   },
   webWrapper: {
-    flex: 1,
+    ...(Platform.OS !== 'web' && { flex: 1 }),
     ...(Platform.OS === 'web' && { alignItems: 'center' }),
   },
   webInner: {
-    flex: 1,
+    ...(Platform.OS !== 'web' && { flex: 1 }),
     width: '100%',
     ...(Platform.OS === 'web' && { maxWidth: WEB_MAX_WIDTH }),
   },
@@ -690,7 +702,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.xxl,
+    paddingBottom: Platform.OS === 'web' ? spacing.xxl * 3 : spacing.xxl,
   },
   loadingContainer: {
     flex: 1,

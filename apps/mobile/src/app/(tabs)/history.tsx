@@ -115,18 +115,19 @@ const WEB_MAX_WIDTH = 1100;
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
+    ...(Platform.OS !== 'web' && { flex: 1 }),
+    ...(Platform.OS === 'web' && { height: '100vh', overflow: 'auto' }),
     backgroundColor: colors.background,
   },
   webWrapper: {
-    flex: 1,
+    ...(Platform.OS !== 'web' && { flex: 1 }),
     ...(Platform.OS === 'web' && {
       alignItems: 'center',
       backgroundColor: colors.neutral[100],
     }),
   },
   webInner: {
-    flex: 1,
+    ...(Platform.OS !== 'web' && { flex: 1 }),
     width: '100%',
     ...(Platform.OS === 'web' && {
       maxWidth: WEB_MAX_WIDTH,

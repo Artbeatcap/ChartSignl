@@ -19,7 +19,7 @@ export default function AccountScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ mode?: AuthMode }>();
   const { answers } = useOnboardingStore();
-  const { setPendingEmailVerification } = useAuthStore();
+  const { setPendingEmailVerification, setSession, user } = useAuthStore();
   
   // Use mode from route params, default to 'signup' if not provided
   const [mode, setMode] = useState<AuthMode>(params.mode || 'signup');
@@ -29,6 +29,16 @@ export default function AccountScreen() {
   const [error, setError] = useState<string | null>(null);
   
   const passwordInputRef = useRef<TextInput>(null);
+  
+  // Watch for auth success via onAuthStateChange
+  useEffect(() => {
+    if (isLoading && user) {
+      // User authenticated successfully, navigate away immediately
+      console.log('[AccountScreen] User detected, navigating to home');
+      setIsLoading(false);
+      router.replace('/(tabs)/home');
+    }
+  }, [isLoading, user, router]);
 
   const handleEmailAuth = async () => {
     if (!email.trim() || !password.trim()) {
@@ -41,9 +51,21 @@ export default function AccountScreen() {
 
     try {
       if (mode === 'signup') {
-        const { data, error: signUpError } = await supabase.auth.signUp({
+        // Add timeout to prevent hanging on sign-up
+        const signUpPromise = supabase.auth.signUp({
           email,
           password,
+        });
+        
+        const timeoutPromise = new Promise<never>((_, reject) => 
+          setTimeout(() => reject(new Error('Sign-up timeout - please try again')), 10000)
+        );
+        
+        const { data, error: signUpError } = await Promise.race([
+          signUpPromise,
+          timeoutPromise
+        ]).catch(err => {
+          throw new Error(err.message || 'Sign-up failed');
         });
 
         // Handle signup errors - if user was created but email failed, allow continuation
@@ -63,16 +85,13 @@ export default function AccountScreen() {
           // Check if email confirmation is required (no session means confirmation needed)
           const needsEmailVerification = !data.session;
           
-          // If we have a session, wait for it to be persisted and verify it
+          // If we have a session, update the auth store immediately
           if (data.session) {
-            // Wait for session to be saved to storage
-            await new Promise(resolve => setTimeout(resolve, 500));
+            // CRITICAL: Explicitly update the auth store
+            setSession(data.session);
             
-            // Verify session is available
-            const { data: { session: verifiedSession } } = await supabase.auth.getSession();
-            if (!verifiedSession) {
-              console.warn('Session not persisted, but user was created');
-            }
+            // Small delay for state propagation
+            await new Promise(resolve => setTimeout(resolve, 100));
             
             // Save onboarding data to profile with retry logic
             let profileCreated = false;
@@ -117,27 +136,40 @@ export default function AccountScreen() {
           router.replace('/(tabs)/home');
         }
       } else {
-        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+        // Sign-in mode: Start the sign-in but don't wait for it
+        // The onAuthStateChange listener will update the store, and useEffect will navigate
+        console.log('[AccountScreen] Starting sign-in');
+        
+        supabase.auth.signInWithPassword({
           email,
           password,
-        });
-
-        if (signInError) throw signInError;
-        
-        // Wait for session to be persisted
-        if (signInData.session) {
-          await new Promise(resolve => setTimeout(resolve, 300));
-          
-          // Verify session is available
-          const { data: { session: verifiedSession } } = await supabase.auth.getSession();
-          if (!verifiedSession) {
-            console.warn('Session not persisted after sign in');
+        }).then(result => {
+          console.log('[AccountScreen] signInWithPassword resolved:', !!result.data.session);
+          if (result.error) {
+            console.error('[AccountScreen] Sign-in error:', result.error.message);
+            setError(result.error.message);
+            setIsLoading(false);
           }
-        }
+        }).catch(err => {
+          console.error('[AccountScreen] Sign-in caught error:', err);
+          setError(err instanceof Error ? err.message : 'Sign-in failed');
+          setIsLoading(false);
+        });
         
-        router.replace('/(tabs)/home');
+        // Set a timeout to catch if sign-in takes too long
+        setTimeout(() => {
+          if (isLoading) {
+            console.warn('[AccountScreen] Sign-in timeout after 8 seconds');
+            setError('Sign-in is taking longer than expected. Please try again.');
+            setIsLoading(false);
+          }
+        }, 8000);
+        
+        // Exit early - don't throw or navigate here, let useEffect handle it
+        return;
       }
     } catch (err) {
+      console.error('[AccountScreen] handleEmailAuth error:', err);
       let errorMessage = err instanceof Error ? err.message : 'Authentication failed';
       
       // Provide more helpful error message for email configuration issues
@@ -163,7 +195,10 @@ export default function AccountScreen() {
       
       setError(errorMessage);
     } finally {
-      setIsLoading(false);
+      // Only clear loading for sign-up (sign-in uses async flow with useEffect)
+      if (mode === 'signup') {
+        setIsLoading(false);
+      }
     }
   };
 
@@ -346,18 +381,19 @@ const WEB_MAX_WIDTH = 600;
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
+    ...(Platform.OS !== 'web' && { flex: 1 }),
+    ...(Platform.OS === 'web' && { height: '100vh', overflow: 'auto' }),
     backgroundColor: colors.background,
   },
   webWrapper: {
-    flex: 1,
+    ...(Platform.OS !== 'web' && { flex: 1 }),
     ...(Platform.OS === 'web' && {
       alignItems: 'center',
       paddingTop: 40,
     }),
   },
   webInner: {
-    flex: 1,
+    ...(Platform.OS !== 'web' && { flex: 1 }),
     width: '100%',
     ...(Platform.OS === 'web' && { maxWidth: WEB_MAX_WIDTH }),
   },
@@ -378,7 +414,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.xl,
+    paddingBottom: Platform.OS === 'web' ? spacing.xxl * 3 : spacing.xl,
   },
   titleSection: {
     marginBottom: spacing.xl,
