@@ -418,6 +418,7 @@ export function StockChart({
                 dataKey="ema9"
                 stroke={CHART_COLORS.ema9}
                 strokeWidth={1.5}
+                strokeOpacity={0.5}
                 dot={false}
                 connectNulls
               />
@@ -426,6 +427,7 @@ export function StockChart({
                 dataKey="ema21"
                 stroke={CHART_COLORS.ema21}
                 strokeWidth={1.5}
+                strokeOpacity={0.5}
                 dot={false}
                 connectNulls
               />
@@ -625,6 +627,7 @@ function SimpleCandlestickChart({
                     stroke={CHART_COLORS.ema9}
                     strokeWidth="1.5"
                     fill="none"
+                    opacity="0.5"
                   />
                 );
               }
@@ -652,6 +655,7 @@ function SimpleCandlestickChart({
                     stroke={CHART_COLORS.ema21}
                     strokeWidth="1.5"
                     fill="none"
+                    opacity="0.5"
                   />
                 );
               }
