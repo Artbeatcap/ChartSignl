@@ -16,6 +16,7 @@ export default function OnboardingLayout() {
       <Stack.Screen name="experience" />
       <Stack.Screen name="stress-reducer" />
       <Stack.Screen name="account" />
+      <Stack.Screen name="forgot-password" />
     </Stack>
   );
 }

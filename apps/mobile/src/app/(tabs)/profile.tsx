@@ -113,6 +113,10 @@ export default function ProfileScreen() {
     router.push('/(settings)/edit-profile');
   };
 
+  const handleChangePassword = () => {
+    router.push('/(settings)/change-password');
+  };
+
   const handleNotifications = () => {
     router.push('/(settings)/notifications');
   };
@@ -305,6 +309,14 @@ export default function ProfileScreen() {
             <View style={styles.settingsItemLeft}>
               <Ionicons name="person-outline" size={24} color={colors.neutral[600]} />
               <Text style={styles.settingsItemText}>Edit Profile</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.neutral[400]} />
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.settingsItem} onPress={handleChangePassword}>
+            <View style={styles.settingsItemLeft}>
+              <Ionicons name="lock-closed-outline" size={24} color={colors.neutral[600]} />
+              <Text style={styles.settingsItemText}>Change Password</Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color={colors.neutral[400]} />
           </TouchableOpacity>

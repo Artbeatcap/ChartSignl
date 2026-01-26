@@ -324,37 +324,6 @@ export default function AccountScreen() {
     }
   };
 
-  // Handle forgot password
-  const handleForgotPassword = async () => {
-    if (!email.trim()) {
-      setError('Please enter your email first');
-      return;
-    }
-
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
-        redirectTo: AuthSession.makeRedirectUri({
-          scheme: 'chartsignl',
-          path: 'auth/reset-password',
-        }),
-      });
-
-      if (error) throw error;
-
-      Alert.alert(
-        'Check Your Email',
-        'We sent you a password reset link. Please check your inbox.',
-        [{ text: 'OK' }]
-      );
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to send reset email');
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   // Render email step
   const renderEmailStep = () => (
@@ -463,7 +432,7 @@ export default function AccountScreen() {
       </View>
 
       {/* Forgot Password */}
-      <TouchableOpacity onPress={handleForgotPassword} disabled={isLoading}>
+      <TouchableOpacity onPress={() => router.push('/(onboarding)/forgot-password')} disabled={isLoading}>
         <Text style={styles.forgotPassword}>Forgot password?</Text>
       </TouchableOpacity>
 

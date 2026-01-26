@@ -41,12 +41,15 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     // Define which route groups don't require auth
     const inAuthGroup = segments[0] === '(onboarding)' || segments[0] === 'auth';
     
+    // Exclude reset-password from redirect - it needs a session (from recovery token) but user should stay on screen
+    const isResetPassword = segments[0] === 'auth' && segments[1] === 'reset-password';
+    
     if (!session && !inAuthGroup) {
       // User is not signed in and trying to access protected route
       // Redirect to welcome/onboarding
       router.replace('/(onboarding)/welcome');
-    } else if (session && inAuthGroup) {
-      // User is signed in but on an auth screen
+    } else if (session && inAuthGroup && !isResetPassword) {
+      // User is signed in but on an auth screen (except reset-password)
       // Redirect to main app
       router.replace('/(tabs)/home');
     }
