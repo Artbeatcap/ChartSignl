@@ -5,6 +5,7 @@ import { Linking } from 'react-native';
 import { supabase } from '../../lib/supabase';
 import { getCurrentUser, updateProfile } from '../../lib/api';
 import { useOnboardingStore } from '../../store/onboardingStore';
+import { useAuthStore } from '../../store/authStore';
 import { colors, typography, spacing } from '../../theme';
 
 /**
@@ -38,6 +39,7 @@ export default function AuthCallbackScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const { answers } = useOnboardingStore();
+  const setSession = useAuthStore((state) => state.setSession);
   const [status, setStatus] = useState<'processing' | 'success' | 'error'>('processing');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -47,6 +49,14 @@ export default function AuthCallbackScreen() {
     const handlePostAuth = async () => {
       // Wait a moment for session to be persisted
       await new Promise(resolve => setTimeout(resolve, 500));
+
+      // CRITICAL: Explicitly update the auth store with the session
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        setSession(session);
+        // Wait for state to propagate
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
 
       // Check if user has an existing profile
       let hasProfile = false;
@@ -79,7 +89,7 @@ export default function AuthCallbackScreen() {
       
       // Navigate to home screen
       // Using replace to prevent back navigation to this screen
-      router.replace('/(tabs)/home');
+      router.replace('/(tabs)/analyze');
     };
 
     const processCallback = async (url: string) => {

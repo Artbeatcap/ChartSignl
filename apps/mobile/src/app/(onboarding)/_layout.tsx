@@ -11,7 +11,7 @@ export default function OnboardingLayout() {
         gestureEnabled: true,
       }}
     >
-      <Stack.Screen name="welcome" />
+      <Stack.Screen name="home" />
       <Stack.Screen name="style" />
       <Stack.Screen name="experience" />
       <Stack.Screen name="stress-reducer" />

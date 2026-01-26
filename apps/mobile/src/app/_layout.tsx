@@ -47,11 +47,11 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     if (!session && !inAuthGroup) {
       // User is not signed in and trying to access protected route
       // Redirect to welcome/onboarding
-      router.replace('/(onboarding)/welcome');
+      router.replace('/(onboarding)/home');
     } else if (session && inAuthGroup && !isResetPassword) {
       // User is signed in but on an auth screen (except reset-password)
       // Redirect to main app
-      router.replace('/(tabs)/home');
+      router.replace('/(tabs)/analyze');
     }
   }, [isInitialized, isLoading, session, segments, router]);
 

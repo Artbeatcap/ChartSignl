@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import { Button } from '../../components';
 import { colors, typography, spacing } from '../../theme';
 
-export default function WelcomeScreen() {
+export default function HomeScreen() {
   const router = useRouter();
 
   return (

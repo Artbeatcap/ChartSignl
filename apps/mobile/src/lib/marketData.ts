@@ -2,38 +2,62 @@ import type { MarketDataPoint, ChartInterval } from '@chartsignl/core';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:4000';
 
+// #region agent log
+if (typeof window !== 'undefined') {
+  fetch('http://127.0.0.1:7243/ingest/40355958-aed9-4b22-9cb1-0b68d3805912',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'marketData.ts:3',message:'marketData API_URL initialized',data:{apiUrl:API_URL,hasEnvVar:!!process.env.EXPO_PUBLIC_API_URL},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+}
+// #endregion
+
 // Fetch market data from our backend (which proxies to Yahoo Finance)
 export async function fetchMarketData(
   symbol: string,
   interval: ChartInterval = '3mo'
 ): Promise<MarketDataPoint[]> {
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/77853d40-2630-465b-b1da-310f30bd4208',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'marketData.ts:9',message:'fetchMarketData entry',data:{symbol,interval,apiUrl:API_URL},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-  // #endregion
   const url = `${API_URL}/api/market-data/${encodeURIComponent(symbol)}?interval=${interval}`;
+  
   // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/77853d40-2630-465b-b1da-310f30bd4208',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'marketData.ts:12',message:'fetchMarketData before request',data:{url},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+  if (typeof window !== 'undefined') {
+    fetch('http://127.0.0.1:7243/ingest/40355958-aed9-4b22-9cb1-0b68d3805912',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'marketData.ts:10',message:'fetchMarketData request',data:{url,apiUrl:API_URL,symbol,interval},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+  }
   // #endregion
-  const response = await fetch(url);
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/77853d40-2630-465b-b1da-310f30bd4208',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'marketData.ts:15',message:'fetchMarketData response received',data:{ok:response.ok,status:response.status,statusText:response.statusText},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-  // #endregion
+  
+  let response: Response;
+  try {
+    response = await fetch(url);
+  } catch (fetchError) {
+    // #region agent log
+    if (typeof window !== 'undefined') {
+      fetch('http://127.0.0.1:7243/ingest/40355958-aed9-4b22-9cb1-0b68d3805912',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'marketData.ts:16',message:'fetchMarketData network error',data:{error:fetchError instanceof Error?fetchError.message:String(fetchError),url},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+    }
+    // #endregion
+    throw new Error(`Network error: ${fetchError instanceof Error ? fetchError.message : 'Failed to fetch'}`);
+  }
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: 'Failed to fetch data' }));
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/77853d40-2630-465b-b1da-310f30bd4208',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'marketData.ts:18',message:'fetchMarketData error response',data:{status:response.status,error},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-    // #endregion
+    let error: any;
+    try {
+      error = await response.json();
+    } catch (parseError) {
+      error = { error: `HTTP ${response.status}: ${response.statusText}` };
+    }
     throw new Error(error.error || 'Failed to fetch market data');
   }
 
-  const data = await response.json();
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/77853d40-2630-465b-b1da-310f30bd4208',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'marketData.ts:22',message:'fetchMarketData response parsed',data:{hasData:!!data.data,dataLength:data.data?.length,dataKeys:Object.keys(data)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-  // #endregion
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/77853d40-2630-465b-b1da-310f30bd4208',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'marketData.ts:23',message:'fetchMarketData exit',data:{returnLength:data.data?.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-  // #endregion
+  let data: any;
+  try {
+    data = await response.json();
+  } catch (parseError) {
+    throw new Error('Failed to parse response');
+  }
+
+  if (!data.data) {
+    throw new Error('Response missing data property');
+  }
+
+  if (!Array.isArray(data.data)) {
+    throw new Error('Response data is not an array');
+  }
+
   return data.data;
 }
 
@@ -60,20 +84,15 @@ export function calculateEMA(data: number[], period: number): (number | undefine
 
 // Add EMAs to market data
 export function addIndicators(data: MarketDataPoint[]): MarketDataPoint[] {
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/77853d40-2630-465b-b1da-310f30bd4208',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'marketData.ts:47',message:'addIndicators entry',data:{dataLength:data.length,firstPoint:data[0]?{timestamp:data[0].timestamp,close:data[0].close}:null},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
-  // #endregion
+  if (!data || data.length === 0) {
+    return [];
+  }
+  
   const closes = data.map((d) => d.close);
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/77853d40-2630-465b-b1da-310f30bd4208',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'marketData.ts:50',message:'addIndicators closes extracted',data:{closesLength:closes.length,firstClose:closes[0],hasNaN:closes.some(c=>isNaN(c))},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
-  // #endregion
 
   const ema9 = calculateEMA(closes, 9);
   const ema21 = calculateEMA(closes, 21);
   const ema50 = calculateEMA(closes, 50);
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/77853d40-2630-465b-b1da-310f30bd4208',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'marketData.ts:54',message:'addIndicators EMAs calculated',data:{ema9Length:ema9.length,ema21Length:ema21.length,ema50Length:ema50.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
-  // #endregion
 
   const result = data.map((point, i) => ({
     ...point,
@@ -81,9 +100,7 @@ export function addIndicators(data: MarketDataPoint[]): MarketDataPoint[] {
     ema21: ema21[i],
     ema50: ema50[i],
   }));
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/77853d40-2630-465b-b1da-310f30bd4208',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'marketData.ts:61',message:'addIndicators exit',data:{resultLength:result.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
-  // #endregion
+  
   return result;
 }
 

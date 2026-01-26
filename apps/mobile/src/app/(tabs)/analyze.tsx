@@ -22,7 +22,7 @@ import { colors, typography, spacing, borderRadius, shadows } from '../../theme'
 import { FREE_ANALYSIS_LIMIT, CHART_INTERVAL_OPTIONS, CHART_COLORS } from '@chartsignl/core';
 import type { ChartViewType, ChartInterval, AILevel, EnhancedAIAnalysis, ScoredLevel } from '@chartsignl/core';
 
-export default function HomeScreen() {
+export default function AnalyzeScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { user, isEmailVerified, showEmailVerificationModal, setShowEmailVerificationModal, pendingEmailVerification, setPendingEmailVerification } = useAuthStore();

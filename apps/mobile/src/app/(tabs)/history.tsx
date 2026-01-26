@@ -20,7 +20,7 @@ export default function HistoryScreen() {
 
   const handleAnalysisPress = (item: AnalysisHistoryItem) => {
     router.push({
-      pathname: '/(tabs)/home',
+      pathname: '/(tabs)/analyze',
       params: { analysisId: item.id },
     });
   };

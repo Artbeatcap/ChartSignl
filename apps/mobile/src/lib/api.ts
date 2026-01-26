@@ -1,4 +1,4 @@
-import { getAccessToken } from './supabase';
+import { Platform } from 'react-native';
 import type {
   GetHistoryResponse,
   GetAnalysisResponse,
@@ -7,25 +7,64 @@ import type {
 } from '@chartsignl/core';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:4000';
+const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL!;
+
+// #region agent log
+if (typeof window !== 'undefined') {
+  fetch('http://127.0.0.1:7243/ingest/40355958-aed9-4b22-9cb1-0b68d3805912',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'api.ts:10',message:'API_URL initialized',data:{apiUrl:API_URL,hasEnvVar:!!process.env.EXPO_PUBLIC_API_URL,envValue:process.env.EXPO_PUBLIC_API_URL},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+}
+// #endregion
+
+// Get access token directly from localStorage to avoid Supabase's hanging getSession()
+function getAccessTokenFromStorage(): string | null {
+  if (Platform.OS !== 'web') return null;
+  
+  try {
+    // Supabase stores the session in localStorage with a specific key format
+    const storageKey = `sb-${SUPABASE_URL.split('//')[1].split('.')[0]}-auth-token`;
+    const storedData = localStorage.getItem(storageKey);
+    if (storedData) {
+      const parsed = JSON.parse(storedData);
+      return parsed?.access_token || null;
+    }
+  } catch (error) {
+    console.error('Error reading token from storage:', error);
+  }
+  return null;
+}
 
 // Generic fetch wrapper with auth
 async function apiFetch<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const token = await getAccessToken();
+  // Get token directly from storage to avoid Supabase's hanging getSession()
+  const token = getAccessTokenFromStorage();
   
   if (!token) {
     throw new Error('Not authenticated');
   }
 
-  const response = await fetch(`${API_URL}${endpoint}`, {
+  // #region agent log
+  const fullUrl = `${API_URL}${endpoint}`;
+  if (typeof window !== 'undefined') {
+    fetch('http://127.0.0.1:7243/ingest/40355958-aed9-4b22-9cb1-0b68d3805912',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'api.ts:42',message:'apiFetch request',data:{url:fullUrl,endpoint,apiUrl:API_URL},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+  }
+  // #endregion
+  
+  const response = await fetch(fullUrl, {
     ...options,
     headers: {
       ...options.headers,
       Authorization: `Bearer ${token}`,
     },
   });
+  
+  // #region agent log
+  if (typeof window !== 'undefined') {
+    fetch('http://127.0.0.1:7243/ingest/40355958-aed9-4b22-9cb1-0b68d3805912',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'api.ts:50',message:'apiFetch response',data:{ok:response.ok,status:response.status,statusText:response.statusText,url:fullUrl},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+  }
+  // #endregion
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: 'Request failed' }));
@@ -84,19 +123,10 @@ export interface SubscriptionStatusResponse {
 }
 
 export async function getSubscriptionStatus(): Promise<SubscriptionStatusResponse> {
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/77853d40-2630-465b-b1da-310f30bd4208',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'api.ts:86',message:'getSubscriptionStatus called',data:{endpoint:'/api/subscription/status'},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'A'})}).catch(()=>{});
-  // #endregion
   try {
     const result = await apiFetch('/api/subscription/status');
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/77853d40-2630-465b-b1da-310f30bd4208',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'api.ts:90',message:'getSubscriptionStatus success',data:{hasResult:!!result},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'A'})}).catch(()=>{});
-    // #endregion
     return result;
   } catch (error) {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/77853d40-2630-465b-b1da-310f30bd4208',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'api.ts:95',message:'getSubscriptionStatus error',data:{error:error instanceof Error?error.message:String(error)},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'A'})}).catch(()=>{});
-    // #endregion
     throw error;
   }
 }

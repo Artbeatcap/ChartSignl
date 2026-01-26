@@ -55,10 +55,20 @@ marketDataRoute.get('/:symbol', async (c) => {
     // Format: /v2/aggs/ticker/{ticker}/range/{multiplier}/{timespan}/{from}/{to}
     const url = `${MASSIVE_BASE_URL}/v2/aggs/ticker/${encodeURIComponent(symbolUpper)}/range/${config.multiplier}/${config.timespan}/${formatDate(startDate)}/${formatDate(endDate)}?adjusted=true&sort=asc&limit=5000&apiKey=${MASSIVE_API_KEY}`;
 
-    const response = await fetch(url);
+    let response: Response;
+    try {
+      response = await fetch(url);
+    } catch (fetchError) {
+      throw fetchError;
+    }
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
+      let errorData: any;
+      try {
+        errorData = await response.json();
+      } catch (parseError) {
+        errorData = { error: `HTTP ${response.status}: ${response.statusText}` };
+      }
       console.error('Massive API error:', response.status, errorData);
       
       if (response.status === 403) {
@@ -70,7 +80,12 @@ marketDataRoute.get('/:symbol', async (c) => {
       return c.json({ error: 'Failed to fetch market data' }, 500);
     }
 
-    const json = await response.json() as any;
+    let json: any;
+    try {
+      json = await response.json();
+    } catch (parseError) {
+      return c.json({ error: 'Failed to parse API response' }, 500);
+    }
 
     if (json.status === 'ERROR' || json.status === 'NOT_FOUND') {
       return c.json({ error: json.error || 'Symbol not found' }, 404);
@@ -98,6 +113,7 @@ marketDataRoute.get('/:symbol', async (c) => {
       resultsCount: json.resultsCount,
       data,
     };
+    
     return c.json(responseData);
   } catch (error) {
     console.error('Market data error:', error);
