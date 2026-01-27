@@ -2,7 +2,7 @@ import { config } from 'dotenv';
 import { resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
-import { existsSync, appendFileSync } from 'fs';
+import { existsSync } from 'fs';
 import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
@@ -13,28 +13,15 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const envPath = resolve(__dirname, '../.env');
 
-// #region agent log
-try{const logPath='c:\\Users\\Art\\VScode\\chartsignl\\.cursor\\debug.log';appendFileSync(logPath,JSON.stringify({location:'index.ts:14',message:'checking env file',data:{envPath,exists:existsSync(envPath),cwd:process.cwd(),dirname:__dirname},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})+'\n');}catch(e: unknown){console.error('Log error:',e instanceof Error?e.message:String(e));}
-// #endregion
-
 if (existsSync(envPath)) {
   const result = config({ path: envPath });
   if (result.error) {
     console.error('Error loading .env file:', result.error);
-    // #region agent log
-    try{const logPath='c:\\Users\\Art\\VScode\\chartsignl\\.cursor\\debug.log';appendFileSync(logPath,JSON.stringify({location:'index.ts:19',message:'env file load error',data:{error:result.error.message},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})+'\n');}catch(e: unknown){console.error('Log error:',e instanceof Error?e.message:String(e));}
-    // #endregion
   } else {
     console.log(`✓ Loaded .env from: ${envPath}`);
-    // #region agent log
-    try{const logPath='c:\\Users\\Art\\VScode\\chartsignl\\.cursor\\debug.log';appendFileSync(logPath,JSON.stringify({location:'index.ts:22',message:'env file loaded',data:{envPath,parsed:Object.keys(result.parsed||{}),massiveKeyInParsed:!!result.parsed?.MASSIVE_API_KEY},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})+'\n');}catch(e: unknown){console.error('Log error:',e instanceof Error?e.message:String(e));}
-    // #endregion
   }
 } else {
   console.warn(`⚠️  .env file not found at: ${envPath}`);
-  // #region agent log
-  try{const logPath='c:\\Users\\Art\\VScode\\chartsignl\\.cursor\\debug.log';appendFileSync(logPath,JSON.stringify({location:'index.ts:25',message:'env file not found',data:{envPath,fallback:true},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})+'\n');}catch(e: unknown){console.error('Log error:',e instanceof Error?e.message:String(e));}
-  // #endregion
   config(); // Fallback to default dotenv behavior
 }
 
@@ -44,10 +31,6 @@ const massiveKeyStatus = process.env.MASSIVE_API_KEY ? `✓ Set (${process.env.M
 console.log(`  MASSIVE_API_KEY: ${massiveKeyStatus}`);
 console.log(`  SUPABASE_URL: ${process.env.SUPABASE_URL ? '✓ Set' : '✗ Missing'}`);
 console.log(`  OPENAI_API_KEY: ${process.env.OPENAI_API_KEY ? '✓ Set' : '✗ Missing'}`);
-
-// #region agent log
-try{const logPath='c:\\Users\\Art\\VScode\\chartsignl\\.cursor\\debug.log';appendFileSync(logPath,JSON.stringify({location:'index.ts:33',message:'env vars after load',data:{hasMassiveKey:!!process.env.MASSIVE_API_KEY,massiveKeyLength:process.env.MASSIVE_API_KEY?.length||0,allEnvKeys:Object.keys(process.env).filter(k=>k.includes('MASSIVE')||k.includes('massive')),cwd:process.cwd()},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})+'\n');}catch(e: unknown){console.error('Log error:',e instanceof Error?e.message:String(e));}
-// #endregion
 
 // Routes
 import analyzeDataRoute from './routes/analyzeData.js';
@@ -65,23 +48,69 @@ app.use('*', logger());
 // Request logging middleware
 app.use('*', async (c, next) => {
   console.log('[MIDDLEWARE] Incoming request:', c.req.method, c.req.path, c.req.url);
-  // #region agent log
-  try{const logPath='c:\\Users\\Art\\VScode\\chartsignl\\.cursor\\debug.log';appendFileSync(logPath,JSON.stringify({location:'index.ts:65',message:'incoming request',data:{method:c.req.method,path:c.req.path,url:c.req.url},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'A'})+'\n');}catch(e: unknown){console.error('Log error:',e instanceof Error?e.message:String(e));}
-  // #endregion
   await next();
 });
 
 // CORS configuration
-const corsOrigins = process.env.CORS_ORIGINS?.split(',') || [
+const defaultOrigins = [
   'http://localhost:8081',
   'http://localhost:19006',
   'http://localhost:3000',
   'https://app.chartsignl.com',
   'https://chartsignl.com',
+  'https://www.chartsignl.com',
 ];
 
+// Merge env var origins with defaults, ensuring www.chartsignl.com is always included
+const envOrigins = process.env.CORS_ORIGINS?.split(',').map(o => o.trim()).filter(Boolean) || [];
+const corsOrigins = [...new Set([...envOrigins, ...defaultOrigins])]; // Remove duplicates
+
+// #region agent log
+import { appendFileSync } from 'fs';
+try {
+  const logPath = 'c:\\Users\\Art\\VScode\\chartsignl_80eb2710\\.cursor\\debug.log';
+  appendFileSync(logPath, JSON.stringify({
+    location: 'index.ts:55',
+    message: 'CORS origins configured',
+    data: {
+      envOrigins,
+      defaultOrigins,
+      corsOrigins,
+      hasWww: corsOrigins.includes('https://www.chartsignl.com'),
+      envVarSet: !!process.env.CORS_ORIGINS,
+    },
+    timestamp: Date.now(),
+    sessionId: 'debug-session',
+    runId: 'run1',
+    hypothesisId: 'A'
+  }) + '\n');
+} catch (e) {}
+// #endregion
+
 app.use('*', cors({
-  origin: corsOrigins,
+  origin: (origin) => {
+    // #region agent log
+    try {
+      const logPath = 'c:\\Users\\Art\\VScode\\chartsignl_80eb2710\\.cursor\\debug.log';
+      appendFileSync(logPath, JSON.stringify({
+        location: 'index.ts:75',
+        message: 'CORS origin check',
+        data: {
+          origin,
+          isAllowed: corsOrigins.includes(origin || ''),
+          corsOrigins,
+        },
+        timestamp: Date.now(),
+        sessionId: 'debug-session',
+        runId: 'run1',
+        hypothesisId: 'B'
+      }) + '\n');
+    } catch (e) {}
+    // #endregion
+    
+    if (!origin) return corsOrigins[0];
+    return corsOrigins.includes(origin) ? origin : null;
+  },
   credentials: true,
   allowHeaders: ['Content-Type', 'Authorization'],
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -115,24 +144,14 @@ app.route('/api/market-data', marketDataRoute);
 app.route('/api/subscription', subscriptionRoute);
 app.route('/api/auth', authRoute);
 
-// #region agent log
-try{const logPath='c:\\Users\\Art\\VScode\\chartsignl\\.cursor\\debug.log';appendFileSync(logPath,JSON.stringify({location:'index.ts:94',message:'routes registered',data:{routes:['analyze-data','analyses','user','market-data','subscription']},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})+'\n');}catch(e: unknown){console.error('Log error:',e instanceof Error?e.message:String(e));}
-// #endregion
-
 // 404 handler
 app.notFound((c) => {
-  // #region agent log
-  try{const logPath='c:\\Users\\Art\\VScode\\chartsignl\\.cursor\\debug.log';appendFileSync(logPath,JSON.stringify({location:'index.ts:97',message:'404 not found',data:{method:c.req.method,path:c.req.path,url:c.req.url},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})+'\n');}catch(e: unknown){console.error('Log error:',e instanceof Error?e.message:String(e));}
-  // #endregion
   return c.json({ error: 'Not found' }, 404);
 });
 
 // Error handler
 app.onError((err, c) => {
   console.error('Server error:', err);
-  // #region agent log
-  try{const logPath='c:\\Users\\Art\\VScode\\chartsignl\\.cursor\\debug.log';appendFileSync(logPath,JSON.stringify({location:'index.ts:102',message:'server error handler',data:{error:err.message,stack:err.stack,path:c.req.path,method:c.req.method},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})+'\n');}catch(e: unknown){console.error('Log error:',e instanceof Error?e.message:String(e));}
-  // #endregion
   return c.json({
     error: 'Internal server error',
     message: process.env.NODE_ENV === 'development' ? err.message : undefined,
