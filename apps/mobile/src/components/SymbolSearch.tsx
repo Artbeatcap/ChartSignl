@@ -11,8 +11,7 @@ import {
   SafeAreaView,
 } from 'react-native';
 import { colors, typography, spacing, borderRadius, shadows } from '../theme';
-
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:4000';
+import { API_URL } from '../lib/apiConfig';
 
 // Popular symbols for quick access
 const POPULAR_SYMBOLS = [

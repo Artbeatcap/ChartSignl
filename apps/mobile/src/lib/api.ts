@@ -6,14 +6,8 @@ import type {
   AuthResponse,
 } from '@chartsignl/core';
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:4000';
+import { API_URL } from './apiConfig';
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL!;
-
-// #region agent log
-if (typeof window !== 'undefined') {
-  fetch('http://127.0.0.1:7243/ingest/40355958-aed9-4b22-9cb1-0b68d3805912',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'api.ts:10',message:'API_URL initialized',data:{apiUrl:API_URL,hasEnvVar:!!process.env.EXPO_PUBLIC_API_URL,envValue:process.env.EXPO_PUBLIC_API_URL},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-}
-// #endregion
 
 // Get access token directly from localStorage to avoid Supabase's hanging getSession()
 function getAccessTokenFromStorage(): string | null {
@@ -45,12 +39,7 @@ async function apiFetch<T>(
     throw new Error('Not authenticated');
   }
 
-  // #region agent log
   const fullUrl = `${API_URL}${endpoint}`;
-  if (typeof window !== 'undefined') {
-    fetch('http://127.0.0.1:7243/ingest/40355958-aed9-4b22-9cb1-0b68d3805912',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'api.ts:42',message:'apiFetch request',data:{url:fullUrl,endpoint,apiUrl:API_URL},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-  }
-  // #endregion
   
   const response = await fetch(fullUrl, {
     ...options,
@@ -59,12 +48,6 @@ async function apiFetch<T>(
       Authorization: `Bearer ${token}`,
     },
   });
-  
-  // #region agent log
-  if (typeof window !== 'undefined') {
-    fetch('http://127.0.0.1:7243/ingest/40355958-aed9-4b22-9cb1-0b68d3805912',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'api.ts:50',message:'apiFetch response',data:{ok:response.ok,status:response.status,statusText:response.statusText,url:fullUrl},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-  }
-  // #endregion
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: 'Request failed' }));

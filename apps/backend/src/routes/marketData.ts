@@ -173,15 +173,16 @@ marketDataRoute.get('/:symbol/quote', async (c) => {
 // GET /api/market-data/search - Search for symbols
 marketDataRoute.get('/search/:query', async (c) => {
   try {
-    const MASSIVE_API_KEY = process.env.MASSIVE_API_KEY || '';
+    // Use same API key as other endpoint (hardcoded fallback if env var not set)
+    const MASSIVE_API_KEY = process.env.MASSIVE_API_KEY || 'RcnenBuGTzPs3aaunhpWW6FpaAzs60Ug';
     const query = c.req.param('query');
 
     if (!MASSIVE_API_KEY) {
       return c.json({ error: 'Massive API key not configured' }, 500);
     }
 
-    // Filter for stocks market only and limit to 50 results for better filtering
-    const url = `${MASSIVE_BASE_URL}/v3/reference/tickers?search=${encodeURIComponent(query)}&market=stocks&active=true&limit=50&apiKey=${MASSIVE_API_KEY}`;
+    // Fetch up to 100 results (stocks and ETFs) for better filtering
+    const url = `${MASSIVE_BASE_URL}/v3/reference/tickers?search=${encodeURIComponent(query)}&active=true&limit=100&apiKey=${MASSIVE_API_KEY}`;
 
     const response = await fetch(url);
 
@@ -196,14 +197,16 @@ marketDataRoute.get('/search/:query', async (c) => {
     const majorExchanges = ['XNAS', 'XNYS', 'ARCX', 'BATS'];
     const excludeOTC = ['OTCM', 'PINK', 'OTCB', 'OTCQ', 'OTCX'];
     
-    let results = (json.results || [])
+    const rawResults = json.results || [];
+    
+    let results = rawResults
       .filter((ticker: any) => {
         // Exclude OTC and pink sheets
         if (excludeOTC.includes(ticker.primary_exchange)) {
           return false;
         }
-        // Only include common stocks and ETFs
-        return ticker.type === 'CS' || ticker.type === 'ETF' || ticker.type === 'ADRC';
+        // Only include common stocks, ETFs, and ETVs (Exchange Traded Vehicles)
+        return ticker.type === 'CS' || ticker.type === 'ETF' || ticker.type === 'ETV' || ticker.type === 'ADRC';
       })
       .map((ticker: any) => ({
         symbol: ticker.ticker,
@@ -213,19 +216,33 @@ marketDataRoute.get('/search/:query', async (c) => {
         exchange: ticker.primary_exchange,
       }));
 
-    // Sort: Major exchanges first, then alphabetically
+    // Sort: Exact match first, then closest match, then major exchanges, then alphabetically
+    const queryUpper = query.toUpperCase();
     results.sort((a: any, b: any) => {
+      // 1. Exact match comes first
+      const aExact = a.symbol === queryUpper;
+      const bExact = b.symbol === queryUpper;
+      if (aExact && !bExact) return -1;
+      if (!aExact && bExact) return 1;
+      
+      // 2. Starts with query comes next
+      const aStarts = a.symbol.startsWith(queryUpper);
+      const bStarts = b.symbol.startsWith(queryUpper);
+      if (aStarts && !bStarts) return -1;
+      if (!aStarts && bStarts) return 1;
+      
+      // 3. Major exchanges preferred
       const aIsMajor = majorExchanges.includes(a.exchange);
       const bIsMajor = majorExchanges.includes(b.exchange);
-      
       if (aIsMajor && !bIsMajor) return -1;
       if (!aIsMajor && bIsMajor) return 1;
       
+      // 4. Alphabetically
       return a.symbol.localeCompare(b.symbol);
     });
 
-    // Limit to top 20 results
-    results = results.slice(0, 20);
+    // Limit to top 40 results
+    results = results.slice(0, 40);
 
     return c.json({ results });
   } catch (error) {

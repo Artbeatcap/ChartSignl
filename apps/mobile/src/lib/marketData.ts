@@ -1,12 +1,5 @@
 import type { MarketDataPoint, ChartInterval } from '@chartsignl/core';
-
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:4000';
-
-// #region agent log
-if (typeof window !== 'undefined') {
-  fetch('http://127.0.0.1:7243/ingest/40355958-aed9-4b22-9cb1-0b68d3805912',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'marketData.ts:3',message:'marketData API_URL initialized',data:{apiUrl:API_URL,hasEnvVar:!!process.env.EXPO_PUBLIC_API_URL},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-}
-// #endregion
+import { API_URL } from './apiConfig';
 
 // Fetch market data from our backend (which proxies to Yahoo Finance)
 export async function fetchMarketData(
@@ -15,21 +8,10 @@ export async function fetchMarketData(
 ): Promise<MarketDataPoint[]> {
   const url = `${API_URL}/api/market-data/${encodeURIComponent(symbol)}?interval=${interval}`;
   
-  // #region agent log
-  if (typeof window !== 'undefined') {
-    fetch('http://127.0.0.1:7243/ingest/40355958-aed9-4b22-9cb1-0b68d3805912',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'marketData.ts:10',message:'fetchMarketData request',data:{url,apiUrl:API_URL,symbol,interval},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-  }
-  // #endregion
-  
   let response: Response;
   try {
     response = await fetch(url);
   } catch (fetchError) {
-    // #region agent log
-    if (typeof window !== 'undefined') {
-      fetch('http://127.0.0.1:7243/ingest/40355958-aed9-4b22-9cb1-0b68d3805912',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'marketData.ts:16',message:'fetchMarketData network error',data:{error:fetchError instanceof Error?fetchError.message:String(fetchError),url},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-    }
-    // #endregion
     throw new Error(`Network error: ${fetchError instanceof Error ? fetchError.message : 'Failed to fetch'}`);
   }
 
