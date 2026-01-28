@@ -504,6 +504,15 @@ export default function AnalyzeScreen() {
             )}
           </Card>
         )}
+
+        {/* Privacy Footer */}
+        <View style={styles.footer}>
+          <TouchableOpacity onPress={() => router.push('/(settings)/privacy')} activeOpacity={0.7}>
+            <Text style={styles.footerText}>
+              Privacy Policy
+            </Text>
+          </TouchableOpacity>
+        </View>
           </ScrollView>
 
           {/* Symbol Search Modal */}
@@ -1015,5 +1024,16 @@ const styles = StyleSheet.create({
     color: colors.red[600],
     marginBottom: spacing.xs,
     lineHeight: 22,
+  },
+  // Footer
+  footer: {
+    alignItems: 'center',
+    marginTop: spacing.xl,
+    marginBottom: spacing.md,
+  },
+  footerText: {
+    ...typography.bodySm,
+    color: colors.primary[600],
+    fontWeight: '500',
   },
 });
