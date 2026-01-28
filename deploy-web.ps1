@@ -34,7 +34,6 @@ Write-Host ""
 Write-Host "Step 2: Checking deployment tools..." -ForegroundColor Yellow
 
 $rsyncAvailable = $false
-$sshAvailable = $false
 $useTarFallback = $false
 
 $useWSL = $false
@@ -44,7 +43,6 @@ try {
     $null = Get-Command ssh -ErrorAction Stop
     $null = Get-Command scp -ErrorAction Stop
     Write-Host "Using native Windows OpenSSH..." -ForegroundColor Yellow
-    $sshAvailable = $true
     $SSH_CMD = "ssh"
     $SCP_CMD = "scp"
     
@@ -61,17 +59,15 @@ try {
     # Try WSL as fallback
     if (Get-Command wsl -ErrorAction SilentlyContinue) {
         Write-Host "Checking WSL for ssh/rsync..." -ForegroundColor Yellow
-        $wslHasSSH = (wsl bash -c "which ssh" 2>$null) -ne $null
-        $wslHasRsync = (wsl bash -c "which rsync" 2>$null) -ne $null
+        $wslHasSSH = $null -ne (wsl bash -c "which ssh" 2>$null)
+        $wslHasRsync = $null -ne (wsl bash -c "which rsync" 2>$null)
         
         if ($wslHasSSH -and $wslHasRsync) {
             Write-Host "Using WSL for rsync/ssh..." -ForegroundColor Yellow
             $rsyncAvailable = $true
-            $sshAvailable = $true
             $useWSL = $true
         } elseif ($wslHasSSH) {
             Write-Host "WSL has ssh but not rsync, will use tar/scp fallback..." -ForegroundColor Yellow
-            $sshAvailable = $true
             $useWSL = $true
             $useTarFallback = $true
         } else {
@@ -115,6 +111,20 @@ if (-not (Test-Path "dist")) {
     exit 1
 }
 
+# Copy static SEO pages into dist output
+$staticDir = Join-Path $MOBILE_DIR "static"
+if (Test-Path $staticDir) {
+    $staticFiles = Get-ChildItem -Path $staticDir -Filter "*.html" -File -ErrorAction SilentlyContinue
+    if ($staticFiles -and $staticFiles.Count -gt 0) {
+        Copy-Item -Path $staticFiles.FullName -Destination (Join-Path $MOBILE_DIR "dist") -Force
+        Write-Host "✅ Copied static SEO HTML pages to dist/" -ForegroundColor Green
+    } else {
+        Write-Host "⚠️  No static HTML files found in $staticDir" -ForegroundColor Yellow
+    }
+} else {
+    Write-Host "⚠️  Static directory not found at $staticDir" -ForegroundColor Yellow
+}
+
 Write-Host "✅ Web app built successfully" -ForegroundColor Green
 Write-Host ""
 
@@ -125,7 +135,7 @@ Write-Host "Step 4: Deploying web app to server..." -ForegroundColor Yellow
 if ($useWSL) {
     wsl ssh $SERVER "mkdir -p ${WEB_PATH}"
 } else {
-    ssh $SERVER "mkdir -p ${WEB_PATH}"
+    & $SSH_CMD $SERVER "mkdir -p ${WEB_PATH}"
 }
 
 if ($useTarFallback -or -not $rsyncAvailable) {
@@ -154,7 +164,7 @@ if ($useTarFallback -or -not $rsyncAvailable) {
     if ($useWSL) {
         wsl scp $webArchive "${SERVER}:${remoteWebArchive}"
     } else {
-        scp $webArchive "${SERVER}:${remoteWebArchive}"
+        & $SCP_CMD $webArchive "${SERVER}:${remoteWebArchive}"
     }
     
     if ($LASTEXITCODE -ne 0) {
@@ -168,7 +178,7 @@ if ($useTarFallback -or -not $rsyncAvailable) {
     if ($useWSL) {
         wsl ssh $SERVER $extractScript
     } else {
-        ssh $SERVER $extractScript
+        & $SSH_CMD $SERVER $extractScript
     }
     
     if ($LASTEXITCODE -ne 0) {
@@ -201,7 +211,7 @@ if ($useTarFallback -or -not $rsyncAvailable) {
     if ($useWSL) {
         wsl ssh $SERVER "chmod -R 755 ${WEB_PATH}"
     } else {
-        ssh $SERVER "chmod -R 755 ${WEB_PATH}"
+        & $SSH_CMD $SERVER "chmod -R 755 ${WEB_PATH}"
     }
 }
 

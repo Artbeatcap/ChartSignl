@@ -262,6 +262,21 @@ if (-not (Test-Path "dist")) {
     exit 1
 }
 
+# Copy static SEO pages into dist output
+$mobileDir = Join-Path $LOCAL_PROJECT_ROOT "apps\mobile"
+$staticDir = Join-Path $mobileDir "static"
+if (Test-Path $staticDir) {
+    $staticFiles = Get-ChildItem -Path $staticDir -Filter "*.html" -File -ErrorAction SilentlyContinue
+    if ($staticFiles -and $staticFiles.Count -gt 0) {
+        Copy-Item -Path $staticFiles.FullName -Destination (Join-Path $mobileDir "dist") -Force
+        Write-Host "✅ Copied static SEO HTML pages to dist/" -ForegroundColor Green
+    } else {
+        Write-Host "⚠️  No static HTML files found in $staticDir" -ForegroundColor Yellow
+    }
+} else {
+    Write-Host "⚠️  Static directory not found at $staticDir" -ForegroundColor Yellow
+}
+
 Write-Host "✅ Web app built" -ForegroundColor Green
 Write-Host ""
 
