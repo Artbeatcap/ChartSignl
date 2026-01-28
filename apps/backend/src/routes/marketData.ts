@@ -6,24 +6,53 @@ const marketDataRoute = new Hono();
 // Massive.com configuration
 const MASSIVE_BASE_URL = 'https://api.massive.com';
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+type MassiveTimespan = 'minute' | 'hour' | 'day' | 'week' | 'month' | 'quarter' | 'year';
+
+function baseMsForTimespan(timespan: MassiveTimespan): number {
+  switch (timespan) {
+    case 'minute':
+      return 60 * 1000;
+    case 'hour':
+      return 60 * 60 * 1000;
+    case 'day':
+      return DAY_MS;
+    case 'week':
+      return 7 * DAY_MS;
+    case 'month':
+      // Approximate; we don't use month/quarter/year in current intervalConfig.
+      return 30 * DAY_MS;
+    case 'quarter':
+      return 91 * DAY_MS;
+    case 'year':
+      return 365 * DAY_MS;
+    default: {
+      // Exhaustiveness guard
+      const _exhaustive: never = timespan;
+      return _exhaustive;
+    }
+  }
+}
+
 // Interval mapping for Massive.com
 // Massive uses: minute, hour, day, week, month, quarter, year
 // With multipliers like 1, 5, 15 for minutes
-const intervalConfig: Record<string, { timespan: string; multiplier: number; daysBack: number }> = {
-  '1d': { timespan: 'minute', multiplier: 5, daysBack: 1 },
-  '5d': { timespan: 'minute', multiplier: 30, daysBack: 5 },
-  '1mo': { timespan: 'hour', multiplier: 1, daysBack: 30 },
-  '3mo': { timespan: 'day', multiplier: 1, daysBack: 90 },
-  '6mo': { timespan: 'day', multiplier: 1, daysBack: 180 },
-  '1y': { timespan: 'day', multiplier: 1, daysBack: 365 },
-  '2y': { timespan: 'week', multiplier: 1, daysBack: 730 },
-  '5y': { timespan: 'week', multiplier: 1, daysBack: 1825 },
+const intervalConfig: Record<
+  string,
+  { timespan: MassiveTimespan; multiplier: number; daysBack: number; emaWarmupBars: number }
+> = {
+  // Intraday: use warmup to avoid EMA cutoff at chart start (market hours create gaps).
+  '1d': { timespan: 'minute', multiplier: 5, daysBack: 1, emaWarmupBars: 200 },
+  '5d': { timespan: 'minute', multiplier: 30, daysBack: 5, emaWarmupBars: 100 },
+  // Hourly bars only exist during market hours; use larger warmup to guarantee >=21 bars.
+  '1mo': { timespan: 'hour', multiplier: 1, daysBack: 30, emaWarmupBars: 100 },
+  '3mo': { timespan: 'day', multiplier: 1, daysBack: 140, emaWarmupBars: 30 },
+  '6mo': { timespan: 'day', multiplier: 1, daysBack: 180, emaWarmupBars: 30 },
+  '1y': { timespan: 'day', multiplier: 1, daysBack: 365, emaWarmupBars: 30 },
+  '2y': { timespan: 'week', multiplier: 1, daysBack: 730, emaWarmupBars: 30 },
+  '5y': { timespan: 'week', multiplier: 1, daysBack: 1825, emaWarmupBars: 30 },
 };
-
-// Format date as YYYY-MM-DD for Massive
-function formatDate(date: Date): string {
-  return date.toISOString().split('T')[0];
-}
 
 // GET /api/market-data/:symbol
 marketDataRoute.get('/:symbol', async (c) => {
@@ -46,14 +75,23 @@ marketDataRoute.get('/:symbol', async (c) => {
 
     const config = intervalConfig[chartInterval] || intervalConfig['3mo'];
 
-    // Calculate date range
+    // Calculate date ranges:
+    // - requestedStartMs is the beginning of the visible window
+    // - fetchStartMs includes warmup bars so EMAs can be computed from the first visible bar
     const endDate = new Date();
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - config.daysBack);
+    const nowMs = endDate.getTime();
+
+    const requestedStartMs = nowMs - config.daysBack * DAY_MS;
+    const warmupMs = config.emaWarmupBars * config.multiplier * baseMsForTimespan(config.timespan);
+    const fetchStartMs = requestedStartMs - warmupMs;
+
+    const fromParam = fetchStartMs;
+    const toParam = nowMs;
 
     // Build Massive URL
     // Format: /v2/aggs/ticker/{ticker}/range/{multiplier}/{timespan}/{from}/{to}
-    const url = `${MASSIVE_BASE_URL}/v2/aggs/ticker/${encodeURIComponent(symbolUpper)}/range/${config.multiplier}/${config.timespan}/${formatDate(startDate)}/${formatDate(endDate)}?adjusted=true&sort=asc&limit=5000&apiKey=${MASSIVE_API_KEY}`;
+    // Massive supports Unix ms timestamps for {from}/{to} path parameters.
+    const url = `${MASSIVE_BASE_URL}/v2/aggs/ticker/${encodeURIComponent(symbolUpper)}/range/${config.multiplier}/${config.timespan}/${fromParam}/${toParam}?adjusted=true&sort=asc&limit=5000&apiKey=${MASSIVE_API_KEY}`;
 
     let response: Response;
     try {
@@ -95,6 +133,14 @@ marketDataRoute.get('/:symbol', async (c) => {
       return c.json({ error: 'No data available for this symbol' }, 404);
     }
 
+    // Determine where the "visible" data begins within the fetched dataset.
+    // (We fetch warmup bars before requestedStartMs to allow EMA initialization.)
+    const visibleStartIndexRaw = (json.results as any[]).findIndex(
+      (bar: any) => typeof bar?.t === 'number' && bar.t >= requestedStartMs
+    );
+    const visibleStartIndex = visibleStartIndexRaw >= 0 ? visibleStartIndexRaw : 0;
+    const emaWarmupBars = visibleStartIndex;
+
     // Transform Massive data to our format
     // Massive returns: t (timestamp), o (open), h (high), l (low), c (close), v (volume), vw (vwap), n (transactions)
     const data: MarketDataPoint[] = json.results.map((bar: any) => ({
@@ -112,8 +158,20 @@ marketDataRoute.get('/:symbol', async (c) => {
       interval: chartInterval,
       resultsCount: json.resultsCount,
       data,
+      visibleStartIndex,
+      emaWarmupBars,
+      totalBars: data.length,
     };
-    
+
+    // #region agent log
+    try {
+      const firstDate = data.length > 0 ? new Date(data[0].timestamp).toISOString() : 'none';
+      const lastDate = data.length > 0 ? new Date(data[data.length - 1].timestamp).toISOString() : 'none';
+      const visibleFirstDate = visibleStartIndex < data.length ? new Date(data[visibleStartIndex].timestamp).toISOString() : 'none';
+      await fetch('http://127.0.0.1:7243/ingest/40355958-aed9-4b22-9cb1-0b68d3805912',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'run2',hypothesisId:'H2',location:'apps/backend/src/routes/marketData.ts:response',message:'backend_data',data:{interval:chartInterval,totalBars:data.length,visibleStartIndex,emaWarmupBars,firstDate,lastDate,visibleFirstDate,requestedStartMs,fetchStartMs},timestamp:Date.now()})}).catch(()=>{});
+    } catch {}
+    // #endregion
+
     return c.json(responseData);
   } catch (error) {
     console.error('Market data error:', error);

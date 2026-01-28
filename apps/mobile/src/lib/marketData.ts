@@ -1,11 +1,27 @@
 import type { MarketDataPoint, ChartInterval } from '@chartsignl/core';
 import { API_URL } from './apiConfig';
 
-// Fetch market data from our backend (which proxies to Yahoo Finance)
+export interface MarketDataResponse {
+  symbol: string;
+  interval: string;
+  resultsCount?: number;
+  data: MarketDataPoint[];
+  visibleStartIndex?: number;
+  emaWarmupBars?: number;
+  totalBars?: number;
+}
+
+export interface FetchMarketDataResult {
+  data: MarketDataPoint[];
+  visibleStartIndex: number;
+  emaWarmupBars: number;
+}
+
+// Fetch market data from our backend (which proxies to Massive.com)
 export async function fetchMarketData(
   symbol: string,
   interval: ChartInterval = '3mo'
-): Promise<MarketDataPoint[]> {
+): Promise<FetchMarketDataResult> {
   const url = `${API_URL}/api/market-data/${encodeURIComponent(symbol)}?interval=${interval}`;
   
   let response: Response;
@@ -40,7 +56,21 @@ export async function fetchMarketData(
     throw new Error('Response data is not an array');
   }
 
-  return data.data;
+  const visibleStartIndex =
+    typeof data.visibleStartIndex === 'number' && Number.isFinite(data.visibleStartIndex) && data.visibleStartIndex >= 0
+      ? Math.floor(data.visibleStartIndex)
+      : 0;
+
+  const emaWarmupBars =
+    typeof data.emaWarmupBars === 'number' && Number.isFinite(data.emaWarmupBars) && data.emaWarmupBars >= 0
+      ? Math.floor(data.emaWarmupBars)
+      : visibleStartIndex;
+
+  return {
+    data: data.data as MarketDataPoint[],
+    visibleStartIndex,
+    emaWarmupBars,
+  };
 }
 
 // Calculate EMA (Exponential Moving Average)
@@ -84,6 +114,40 @@ export function addIndicators(data: MarketDataPoint[]): MarketDataPoint[] {
   }));
   
   return result;
+}
+
+// Calculate indicators on full data, then trim warmup bars before display
+export function addIndicatorsAndTrim(data: MarketDataPoint[], visibleStartIndex: number): MarketDataPoint[] {
+  const withIndicators = addIndicators(data);
+  if (!withIndicators.length) return [];
+
+  const safeIndex =
+    Number.isFinite(visibleStartIndex) && visibleStartIndex > 0
+      ? Math.min(Math.floor(visibleStartIndex), withIndicators.length)
+      : 0;
+
+  const trimmed = withIndicators.slice(safeIndex);
+
+  // #region agent log
+  try {
+    const firstDate = data.length > 0 ? new Date(data[0].timestamp).toISOString() : 'none';
+    const lastDate = data.length > 0 ? new Date(data[data.length - 1].timestamp).toISOString() : 'none';
+    const trimmedFirstDate = trimmed.length > 0 ? new Date(trimmed[0].timestamp).toISOString() : 'none';
+    const trimmedLastDate = trimmed.length > 0 ? new Date(trimmed[trimmed.length - 1].timestamp).toISOString() : 'none';
+    fetch('http://127.0.0.1:7243/ingest/40355958-aed9-4b22-9cb1-0b68d3805912',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'run2',hypothesisId:'H2',location:'apps/mobile/src/lib/marketData.ts:addIndicatorsAndTrim',message:'frontend_trim',data:{fullLen:data.length,visibleStartIndex,safeIndex,trimmedLen:trimmed.length,firstDate,lastDate,trimmedFirstDate,trimmedLastDate},timestamp:Date.now()})}).catch(()=>{});
+  } catch {}
+  // #endregion
+
+  return trimmed;
+}
+
+// Convenience function: fetch + add indicators + trim warmup
+export async function fetchMarketDataWithIndicators(
+  symbol: string,
+  interval: ChartInterval = '3mo'
+): Promise<MarketDataPoint[]> {
+  const { data, visibleStartIndex } = await fetchMarketData(symbol, interval);
+  return addIndicatorsAndTrim(data, visibleStartIndex);
 }
 
 // Format price for display

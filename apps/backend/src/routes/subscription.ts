@@ -1,13 +1,7 @@
 import { Hono } from 'hono';
 import Stripe from 'stripe';
 import { supabaseAdmin, getUserFromToken } from '../lib/supabase.js';
-import { appendFileSync } from 'fs';
-
 const subscriptionRoute = new Hono();
-
-// #region agent log
-try{const logPath='c:\\Users\\Art\\VScode\\chartsignl\\.cursor\\debug.log';appendFileSync(logPath,JSON.stringify({location:'subscription.ts:6',message:'subscription route module loaded',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})+'\n');}catch(e: unknown){console.error('Log error:',e instanceof Error?e.message:String(e));}
-// #endregion
 
 // Initialize Stripe
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
@@ -19,7 +13,8 @@ if (!stripeSecretKey) {
 }
 
 const stripe = stripeSecretKey ? new Stripe(stripeSecretKey, {
-  apiVersion: '2023-10-16',
+  // Stripe's TS types require the latest API version literal.
+  apiVersion: '2025-12-15.clover',
   typescript: true,
 }) : null;
 
@@ -32,9 +27,6 @@ subscriptionRoute.get('/status', async (c) => {
     url: c.req.url,
     hasAuth: !!c.req.header('Authorization')
   });
-  // #region agent log
-  try{const logPath='c:\\Users\\Art\\VScode\\chartsignl\\.cursor\\debug.log';appendFileSync(logPath,JSON.stringify({location:'subscription.ts:22',message:'subscription status route hit',data:{method:c.req.method,path:c.req.path,url:c.req.url,hasAuthHeader:!!c.req.header('Authorization')},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'A'})+'\n');}catch(e: unknown){console.error('Log error:',e instanceof Error?e.message:String(e));}
-  // #endregion
   try {
     const authHeader = c.req.header('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
@@ -98,9 +90,6 @@ subscriptionRoute.get('/status', async (c) => {
 
   } catch (error) {
     console.error('Get subscription status error:', error);
-    // #region agent log
-    try{const logPath='c:\\Users\\Art\\VScode\\chartsignl\\.cursor\\debug.log';appendFileSync(logPath,JSON.stringify({location:'subscription.ts:92',message:'subscription status error',data:{error:error instanceof Error?error.message:String(error),stack:error instanceof Error?error.stack:undefined},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})+'\n');}catch(e: unknown){console.error('Log error:',e instanceof Error?e.message:String(e));}
-    // #endregion
     return c.json({
       success: false,
       error: error instanceof Error ? error.message : 'Internal server error',
@@ -282,7 +271,7 @@ subscriptionRoute.post('/webhook', async (c) => {
           break;
         }
 
-        const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+        const subscription = (await stripe.subscriptions.retrieve(subscriptionId)) as any;
         const customerId = typeof subscription.customer === 'string' 
           ? subscription.customer 
           : subscription.customer.id;
@@ -296,8 +285,8 @@ subscriptionRoute.post('/webhook', async (c) => {
             stripe_customer_id: customerId,
             status: subscription.status === 'active' ? 'active' : 'free',
             platform: 'web',
-            current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
-            current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+            current_period_start: new Date(((subscription as any).current_period_start ?? 0) * 1000).toISOString(),
+            current_period_end: new Date(((subscription as any).current_period_end ?? 0) * 1000).toISOString(),
             updated_at: new Date().toISOString(),
           }, { onConflict: 'user_id' });
 
@@ -341,8 +330,8 @@ subscriptionRoute.post('/webhook', async (c) => {
             stripe_customer_id: customerId,
             status,
             platform: 'web',
-            current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
-            current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+            current_period_start: new Date(((subscription as any).current_period_start ?? 0) * 1000).toISOString(),
+            current_period_end: new Date(((subscription as any).current_period_end ?? 0) * 1000).toISOString(),
             updated_at: new Date().toISOString(),
           }, { onConflict: 'user_id' });
 

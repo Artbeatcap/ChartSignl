@@ -499,8 +499,13 @@ function SimpleCandlestickChart({
 }: SimpleCandlestickChartProps) {
   const width = Dimensions.get('window').width - 40;
   const chartHeight = height - 60;
-  const candleWidth = Math.max(2, Math.min(12, (width - 60) / data.length));
-  const candleSpacing = candleWidth * 0.3;
+  
+  // Calculate candle dimensions to use ~95% of available chart width (left margin: 50px, right margin: 10px)
+  const chartDrawableWidth = width - 60; // 50px left + 10px right
+  const targetWidth = chartDrawableWidth * 0.95; // Use 95% of available space
+  const candleAndSpacingWidth = targetWidth / data.length;
+  const candleWidth = Math.max(2, Math.min(12, candleAndSpacingWidth * 0.75)); // 75% bar, 25% space
+  const candleSpacing = candleAndSpacingWidth - candleWidth;
 
   // Helper to convert price to Y coordinate
   const priceToY = (price: number) => {

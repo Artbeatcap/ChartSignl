@@ -15,7 +15,7 @@ import { useRouter } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, Card, SymbolSearch, StockChart, EmailVerificationBanner } from '../../components';
 import { useAuthStore } from '../../store/authStore';
-import { fetchMarketData, addIndicators, formatPrice, calculatePriceChange } from '../../lib/marketData';
+import { fetchMarketDataWithIndicators, formatPrice, calculatePriceChange } from '../../lib/marketData';
 import { findLocalLevels, detectTrend, analyzeChartData } from '../../lib/chartAnalysis';
 import { getUsage } from '../../lib/api';
 import { colors, typography, spacing, borderRadius, shadows } from '../../theme';
@@ -54,30 +54,25 @@ export default function AnalyzeScreen() {
 
   // Fetch market data
   const {
-    data: rawData,
+    data: chartData,
     isLoading: isLoadingData,
     error: dataError,
     refetch,
   } = useQuery({
     queryKey: ['marketData', selectedSymbol, selectedInterval],
-    queryFn: () => fetchMarketData(selectedSymbol, selectedInterval),
+    queryFn: () => fetchMarketDataWithIndicators(selectedSymbol, selectedInterval),
     staleTime: 1000 * 60 * 5, // 5 minutes
     retry: 2,
   });
-
-  // Process data with indicators
-  const chartData = useMemo(() => {
-    if (!rawData || rawData.length === 0) return [];
-    return addIndicators(rawData);
-  }, [rawData]);
+  const safeChartData = chartData ?? [];
 
   // Calculate local levels when data changes
   useEffect(() => {
-    if (chartData.length > 0) {
-      const levels = findLocalLevels(chartData);
+    if (safeChartData.length > 0) {
+      const levels = findLocalLevels(safeChartData);
       setLocalLevels(levels);
     }
-  }, [chartData]);
+  }, [safeChartData]);
 
   // Check for pending email verification on mount and trigger modal
   useEffect(() => {
@@ -89,16 +84,16 @@ export default function AnalyzeScreen() {
 
   // Price change calculation
   const priceChange = useMemo(() => {
-    return calculatePriceChange(chartData);
-  }, [chartData]);
+    return calculatePriceChange(safeChartData);
+  }, [safeChartData]);
 
   // Current price
-  const currentPrice = chartData.length > 0 ? chartData[chartData.length - 1].close : 0;
+  const currentPrice = safeChartData.length > 0 ? safeChartData[safeChartData.length - 1].close : 0;
 
   // Trend detection
   const trend = useMemo(() => {
-    return detectTrend(chartData);
-  }, [chartData]);
+    return detectTrend(safeChartData);
+  }, [safeChartData]);
 
   const remainingAnalyses = usage?.isPro
     ? '∞'
@@ -130,7 +125,7 @@ export default function AnalyzeScreen() {
     setErrorMessage(null); // Clear previous errors
 
     try {
-      const analysis = await analyzeChartData(selectedSymbol, selectedInterval, chartData);
+      const analysis = await analyzeChartData(selectedSymbol, selectedInterval, safeChartData);
       setAiAnalysis(analysis);
       setShowLevels(true);
       setErrorMessage(null); // Clear any previous errors on success
@@ -337,7 +332,7 @@ export default function AnalyzeScreen() {
             </View>
           ) : (
             <StockChart
-              data={chartData}
+              data={safeChartData}
               symbol={selectedSymbol}
               interval={selectedInterval}
               viewType={viewType}
@@ -387,7 +382,7 @@ export default function AnalyzeScreen() {
             size="lg"
             fullWidth
             loading={isAnalyzing}
-            disabled={isLoadingData || chartData.length === 0 || !usage}
+            disabled={isLoadingData || safeChartData.length === 0 || !usage}
             variant={
               !usage?.isPro && usage && usage.freeAnalysesUsed >= FREE_ANALYSIS_LIMIT
                 ? 'secondary'
