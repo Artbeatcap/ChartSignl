@@ -15,7 +15,7 @@ services:
       - SUPABASE_URL=${SUPABASE_URL}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - CORS_ORIGINS=${CORS_ORIGINS:-https://app.chartsignl.com}
+      - CORS_ORIGINS=http://localhost:8081,http://localhost:19006,http://localhost:3000,https://app.chartsignl.com,https://chartsignl.com,https://www.chartsignl.com
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:4000/health"]
       interval: 30s

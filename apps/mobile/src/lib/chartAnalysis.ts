@@ -1,7 +1,6 @@
 import type { MarketDataPoint, EnhancedAIAnalysis, AILevel, EnhancedAnalysisResponse } from '@chartsignl/core';
 import { getAccessToken } from './supabase';
-
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:4000';
+import { API_URL } from './apiConfig';
 
 // Analyze chart data using AI (via our backend)
 export async function analyzeChartData(

@@ -64,15 +64,21 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     // Exclude reset-password from redirect - it needs a session (from recovery token) but user should stay on screen
     const isResetPassword = segments[0] === 'auth' && segments[1] === 'reset-password';
     
+    // Check if user has any auth (session OR user object for unverified users)
     const hasAuth = session || user;
+    
     if (!hasAuth && !inAuthGroup) {
       // User is not signed in and trying to access protected route
       // Redirect to welcome/onboarding
+      console.log('AuthGate: No auth, redirecting to home');
       router.replace('/(onboarding)/home');
     } else if (hasAuth && inAuthGroup && !isResetPassword) {
       // User is signed in but on an auth screen (except reset-password)
-      // Redirect to main app
-      router.replace('/(tabs)/analyze');
+      // Only redirect if they're on onboarding pages, not settings
+      if (segments[0] === '(onboarding)') {
+        console.log('AuthGate: Has auth, on onboarding, redirecting to analyze');
+        router.replace('/(tabs)/analyze');
+      }
     }
   }, [isInitialized, isLoading, session, user, segments, router]);
 

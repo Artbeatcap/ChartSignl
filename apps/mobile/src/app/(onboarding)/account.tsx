@@ -131,7 +131,16 @@ export default function AccountScreen() {
         password,
       });
 
-      if (signInError) throw signInError;
+      if (signInError) {
+        // Check if the error is about email not being confirmed
+        const errorMsg = signInError.message.toLowerCase();
+        if (errorMsg.includes('email not confirmed') || errorMsg.includes('email_not_confirmed')) {
+          setError('Please check your inbox and verify your email to sign in. You can request a new verification email below.');
+          setIsLoading(false);
+          return;
+        }
+        throw signInError;
+      }
 
       if (data.session) {
         // Explicitly update auth store
@@ -147,9 +156,47 @@ export default function AccountScreen() {
       
       if (errorMessage.toLowerCase().includes('invalid login credentials')) {
         setError('Incorrect password. Please try again.');
+      } else if (errorMessage.toLowerCase().includes('email not confirmed') || 
+                 errorMessage.toLowerCase().includes('email_not_confirmed')) {
+        setError('Please verify your email before signing in. Check your inbox for the verification link.');
       } else {
         setError(errorMessage);
       }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Handle resend verification email for existing unverified users
+  const handleResendVerification = async () => {
+    if (!email.trim()) {
+      setError('Please enter your email');
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: email.trim().toLowerCase(),
+      });
+
+      if (error) throw error;
+
+      if (Platform.OS === 'web') {
+        window.alert('Verification email sent! Please check your inbox and click the link to verify your account.');
+      } else {
+        Alert.alert(
+          'Email Sent',
+          'Verification email sent! Please check your inbox and click the link to verify your account.',
+          [{ text: 'OK' }]
+        );
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to send verification email';
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -427,8 +474,23 @@ export default function AccountScreen() {
         <Text style={styles.forgotPassword}>Forgot password?</Text>
       </TouchableOpacity>
 
-      {/* Error Message */}
-      {error && <Text style={styles.errorText}>{error}</Text>}
+      {/* Error Message with optional resend verification link */}
+      {error && (
+        <View>
+          <Text style={styles.errorText}>{error}</Text>
+          {(error.toLowerCase().includes('verify') || error.toLowerCase().includes('verification')) && (
+            <TouchableOpacity 
+              onPress={handleResendVerification} 
+              disabled={isLoading}
+              style={styles.resendButton}
+            >
+              <Text style={styles.resendButtonText}>
+                Resend verification email
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
 
       {/* Sign In Button */}
       <Button
@@ -710,6 +772,14 @@ const styles = StyleSheet.create({
     color: colors.error,
     marginTop: -spacing.sm,
     marginBottom: spacing.sm,
+  },
+  resendButton: {
+    marginBottom: spacing.sm,
+  },
+  resendButtonText: {
+    ...typography.bodySm,
+    color: colors.primary[600],
+    textDecorationLine: 'underline',
   },
   primaryButton: {
     marginTop: spacing.sm,

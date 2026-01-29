@@ -79,6 +79,7 @@ Write-Host "Step 1: Syncing backend code to server..." -ForegroundColor Yellow
 $excludeArgs = @(
     "--exclude=node_modules",
     "--exclude=.git",
+    "--exclude=/.env",
     "--exclude=dist",
     "--exclude=.expo",
     "--exclude=android",
@@ -95,7 +96,7 @@ $rsyncArgs = @(
     "--delete"
 ) + $excludeArgs + @(
     "$LOCAL_PROJECT_ROOT/",
-    "${SERVER}:${BACKEND_PATH}/"
+    "$SERVER`:$BACKEND_PATH/"
 )
 
 if ($USE_TAR_FALLBACK) {
@@ -145,9 +146,9 @@ if ($USE_TAR_FALLBACK) {
     
     $remoteArchive = "/tmp/chartsignl-backend.tar"
     if ($USE_WSL) {
-        wsl scp $backendArchive "${SERVER}:${remoteArchive}"
+        wsl scp $backendArchive "$SERVER`:$remoteArchive"
     } else {
-        scp $backendArchive "${SERVER}:${remoteArchive}"
+        scp $backendArchive "$SERVER`:$remoteArchive"
     }
     
     if ($LASTEXITCODE -ne 0) {
@@ -157,7 +158,7 @@ if ($USE_TAR_FALLBACK) {
     }
     
     # Extract on server
-    $extractCmd = "cd ${BACKEND_PATH} && tar -xf ${remoteArchive} && rm ${remoteArchive}"
+    $extractCmd = "cd $BACKEND_PATH" + ' && ' + "tar -xf $remoteArchive" + ' && ' + "rm $remoteArchive"
     if ($USE_WSL) {
         wsl ssh $SERVER $extractCmd
     } else {
@@ -232,7 +233,7 @@ try {
     } else {
         # Use scp to copy script and execute
         $remoteScript = "/tmp/chartsignl-deploy-$(Get-Date -Format 'yyyyMMdd-HHmmss').sh"
-        scp $tempScript "${SERVER}:${remoteScript}"
+        scp $tempScript "$SERVER`:$remoteScript"
         ssh $SERVER "bash $remoteScript && rm -f $remoteScript"
     }
 } finally {
@@ -252,9 +253,13 @@ if (-not (Test-Path "node_modules")) {
     npm install
 }
 
-# Build web app with production API URL
-Write-Host "Building Expo web app..." -ForegroundColor Yellow
+# For production builds, always use production API URL
+Write-Host "Setting production API URL..." -ForegroundColor Yellow
 $env:EXPO_PUBLIC_API_URL = "https://api.chartsignl.com"
+Write-Host "EXPO_PUBLIC_API_URL set to: $env:EXPO_PUBLIC_API_URL" -ForegroundColor Green
+
+# Build web app
+Write-Host "Building Expo web app..." -ForegroundColor Yellow
 npm run build:web
 
 if (-not (Test-Path "dist")) {
@@ -285,9 +290,9 @@ Write-Host "Step 4: Deploying web app to server..." -ForegroundColor Yellow
 
 # Create directory on server
 if ($USE_WSL) {
-    wsl ssh $SERVER "mkdir -p ${WEB_PATH}"
+    wsl ssh $SERVER "mkdir -p $WEB_PATH"
 } else {
-    ssh $SERVER "mkdir -p ${WEB_PATH}"
+    ssh $SERVER "mkdir -p $WEB_PATH"
 }
 
 # Sync web build
@@ -295,7 +300,7 @@ $webRsyncArgs = @(
     "-avz",
     "--delete",
     "$LOCAL_PROJECT_ROOT/apps/mobile/dist/",
-    "${SERVER}:${WEB_PATH}/"
+    "$SERVER`:$WEB_PATH/"
 )
 
 if ($USE_TAR_FALLBACK) {
@@ -314,9 +319,9 @@ if ($USE_TAR_FALLBACK) {
     
     $remoteWebArchive = "/tmp/chartsignl-web.tar"
     if ($USE_WSL) {
-        wsl scp $webArchive "${SERVER}:${remoteWebArchive}"
+        wsl scp $webArchive "$SERVER`:$remoteWebArchive"
     } else {
-        scp $webArchive "${SERVER}:${remoteWebArchive}"
+        scp $webArchive "$SERVER`:$remoteWebArchive"
     }
     
     if ($LASTEXITCODE -ne 0) {
@@ -326,7 +331,7 @@ if ($USE_TAR_FALLBACK) {
     }
     
     # Extract on server (strip the dist directory and extract contents directly)
-    $extractCmd = "mkdir -p ${WEB_PATH} && cd ${WEB_PATH} && tar -xf ${remoteWebArchive} --strip-components=1 && rm ${remoteWebArchive} && chmod -R 755 ."
+    $extractCmd = "mkdir -p $WEB_PATH" + ' && ' + "cd $WEB_PATH" + ' && ' + "tar -xf $remoteWebArchive --strip-components=1" + ' && ' + "rm $remoteWebArchive" + ' && ' + "chmod -R 755 ."
     if ($USE_WSL) {
         wsl ssh $SERVER $extractCmd
     } else {
@@ -337,7 +342,7 @@ if ($USE_TAR_FALLBACK) {
 } elseif ($USE_WSL) {
     # Convert Windows path to WSL path
     $wslDistPath = "$LOCAL_PROJECT_ROOT/apps/mobile/dist/".Replace('\', '/').Replace('C:', '/mnt/c').Replace('c:', '/mnt/c')
-    wsl rsync -avz --delete "$wslDistPath" "${SERVER}:${WEB_PATH}/"
+    wsl rsync -avz --delete "$wslDistPath" "$SERVER`:$WEB_PATH/"
 } else {
     & rsync $webRsyncArgs
 }
@@ -350,8 +355,8 @@ Write-Host "══════════════════════�
 Write-Host "✅ Deployment Complete!" -ForegroundColor Green
 Write-Host "════════════════════════════════════════" -ForegroundColor Green
 Write-Host ""
-Write-Host "Backend: ${SERVER}:${BACKEND_PATH}"
-Write-Host "Web App: ${SERVER}:${WEB_PATH}"
+Write-Host "Backend: $SERVER`:$BACKEND_PATH"
+Write-Host "Web App: $SERVER`:$WEB_PATH"
 Write-Host ""
 Write-Host "Backend should be running on port 4000"
-Write-Host "Web app should be served from ${WEB_PATH}"
+Write-Host "Web app should be served from $WEB_PATH"

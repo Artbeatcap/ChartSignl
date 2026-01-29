@@ -21,6 +21,7 @@ interface AuthState {
   checkSubscriptionStatus: () => Promise<boolean>;
   refreshSubscription: () => Promise<void>;
   checkEmailVerification: () => Promise<boolean>;
+  refreshSession: () => Promise<void>;
   setShowEmailVerificationModal: (show: boolean) => void;
   setPendingEmailVerification: (pending: boolean) => void;
 }
@@ -28,7 +29,7 @@ interface AuthState {
 export const useAuthStore = create<AuthState>((set, get) => ({
   session: null,
   user: null,
-  isLoading: false, // Start as false, set to true when initializing
+  isLoading: false,
   isInitialized: false,
   isPremium: false,
   isEmailVerified: true, // Default to true until we check
@@ -65,7 +66,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   initialize: async () => {
-    // Prevent multiple simultaneous initializations - only check isInitialized
+    // Prevent multiple simultaneous initializations
     if (get().isInitialized) {
       return;
     }
@@ -149,19 +150,81 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
-  checkEmailVerification: async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    
-    if (user) {
-      const isVerified = !!user.email_confirmed_at;
-      set({ 
-        user,
-        isEmailVerified: isVerified,
-      });
-      return isVerified;
+  // Force refresh the session from the server to get latest user data
+  refreshSession: async () => {
+    try {
+      // First try to refresh the session
+      const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+      
+      if (refreshError) {
+        console.log('Session refresh error (may be expected):', refreshError.message);
+      }
+      
+      if (refreshData?.session) {
+        const isEmailVerified = !!refreshData.session.user?.email_confirmed_at;
+        set({
+          session: refreshData.session,
+          user: refreshData.session.user,
+          isEmailVerified,
+          pendingEmailVerification: refreshData.session.user && !isEmailVerified,
+        });
+        return;
+      }
+      
+      // Fallback: get current session
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        const isEmailVerified = !!session.user?.email_confirmed_at;
+        set({
+          session,
+          user: session.user,
+          isEmailVerified,
+          pendingEmailVerification: session.user && !isEmailVerified,
+        });
+      }
+    } catch (error) {
+      console.error('Error refreshing session:', error);
     }
-    
-    return false;
+  },
+
+  checkEmailVerification: async () => {
+    try {
+      // Force fetch fresh user data from the server
+      const { data: { user }, error } = await supabase.auth.getUser();
+      
+      if (error) {
+        console.error('Error checking email verification:', error);
+        return false;
+      }
+      
+      if (user) {
+        const isVerified = !!user.email_confirmed_at;
+        const currentState = get();
+        
+        // Only update if verification status changed
+        if (currentState.isEmailVerified !== isVerified) {
+          console.log('Email verification status changed:', isVerified);
+          set({ 
+            user,
+            isEmailVerified: isVerified,
+            pendingEmailVerification: !isVerified,
+            showEmailVerificationModal: false,
+          });
+          
+          // If just verified, also refresh the session to get fresh tokens
+          if (isVerified && !currentState.isEmailVerified) {
+            await get().refreshSession();
+          }
+        }
+        
+        return isVerified;
+      }
+      
+      return false;
+    } catch (error) {
+      console.error('Error in checkEmailVerification:', error);
+      return false;
+    }
   },
 
   setShowEmailVerificationModal: (show) => {
@@ -231,15 +294,26 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         session: null,
         user: null,
         isPremium: false,
-        isEmailVerified: true,
+        isEmailVerified: true, // Reset to default
         showEmailVerificationModal: false,
         pendingEmailVerification: false,
+        isInitialized: true, // Keep initialized so auth gate can redirect
       });
 
       return true;
     } catch (error) {
       console.error('SignOut error:', error);
-      return false;
+      // Even on error, clear local state to allow user to get back to login
+      set({
+        session: null,
+        user: null,
+        isPremium: false,
+        isEmailVerified: true,
+        showEmailVerificationModal: false,
+        pendingEmailVerification: false,
+        isInitialized: true, // Keep initialized so auth gate can redirect
+      });
+      return true; // Return true to allow navigation even if there was an error
     }
   },
 }));

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Modal } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Modal, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, typography, spacing, borderRadius } from '../theme';
 import { supabase } from '../lib/supabase';
@@ -16,17 +16,19 @@ export function EmailVerificationBanner({
   variant = 'banner',
   onDismiss 
 }: EmailVerificationBannerProps) {
-  const { user, isEmailVerified, checkEmailVerification } = useAuthStore();
+  const { user, isEmailVerified, checkEmailVerification, refreshSession } = useAuthStore();
   const [isResending, setIsResending] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
   const [showSuccess, setShowSuccess] = useState(false);
   const [showModal, setShowModal] = useState(true);
 
-  // Don't show if email is already verified or no user
-  if (isEmailVerified || !user) {
-    return null;
-  }
+  // #region agent log
+  const shouldHide = isEmailVerified || !user;
+  fetch('http://127.0.0.1:7243/ingest/40355958-aed9-4b22-9cb1-0b68d3805912',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'EmailVerificationBanner.tsx:render',message:'EmailVerificationBanner render',data:{hasUser:!!user,isEmailVerified,shouldHide},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H1'})}).catch(()=>{});
+  // #endregion
 
+  // All hooks must run unconditionally (before any early return) to satisfy Rules of Hooks
   useEffect(() => {
     // Countdown timer for resend cooldown
     if (resendCooldown > 0) {
@@ -39,10 +41,15 @@ export function EmailVerificationBanner({
     // Periodically check if email was verified (e.g., user clicked link in another tab)
     const interval = setInterval(() => {
       checkEmailVerification();
-    }, 30000); // Check every 30 seconds
+    }, 15000); // Check every 15 seconds
 
     return () => clearInterval(interval);
   }, [checkEmailVerification]);
+
+  // Don't show if email is already verified or no user (after all hooks)
+  if (shouldHide) {
+    return null;
+  }
 
   const handleResendEmail = async () => {
     if (resendCooldown > 0 || isResending) return;
@@ -65,23 +72,44 @@ export function EmailVerificationBanner({
       // Show user-friendly error message
       const errorMessage = error instanceof Error 
         ? error.message 
-        : 'Failed to send verification email. Please check your Supabase email configuration.';
+        : 'Failed to send verification email. Please try again.';
       
-      // For now, we'll just log - in a production app, you might want to show an Alert
-      // or update the UI to show the error state
+      if (Platform.OS === 'web') {
+        window.alert('Error: ' + errorMessage);
+      }
+      
       console.error('Email verification error:', errorMessage);
     } finally {
       setIsResending(false);
     }
   };
 
+  const handleRefreshStatus = async () => {
+    if (isRefreshing) return;
+    
+    setIsRefreshing(true);
+    try {
+      // First try to refresh the session
+      await refreshSession();
+      // Then check email verification status
+      const verified = await checkEmailVerification();
+      
+      if (verified) {
+        // Email is now verified!
+        if (Platform.OS === 'web') {
+          window.alert('Email verified! You now have full access to all features.');
+        }
+      }
+    } catch (error) {
+      console.error('Error refreshing verification status:', error);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   const handleDismiss = () => {
     setShowModal(false);
     onDismiss?.();
-  };
-
-  const handleRefreshStatus = async () => {
-    await checkEmailVerification();
   };
 
   // Modal variant - shows on first load after signup
@@ -132,8 +160,11 @@ export function EmailVerificationBanner({
               </TouchableOpacity>
             )}
 
-            <TouchableOpacity style={styles.continueButton} onPress={handleDismiss}>
-              <Text style={styles.continueButtonText}>Continue to App</Text>
+            <TouchableOpacity
+              style={styles.dismissButton}
+              onPress={handleDismiss}
+            >
+              <Text style={styles.dismissText}>Continue to App</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -141,55 +172,144 @@ export function EmailVerificationBanner({
     );
   }
 
-  // Banner variant - persistent reminder
+  // Banner variant - shows in profile and other screens
   return (
     <View style={styles.banner}>
       <View style={styles.bannerContent}>
         <View style={styles.bannerIcon}>
-          <Ionicons name="mail-unread-outline" size={20} color={colors.amber[700]} />
+          <Ionicons name="mail-unread-outline" size={24} color={colors.amber[600]} />
         </View>
-        <View style={styles.bannerText}>
+        <View style={styles.bannerTextContainer}>
           <Text style={styles.bannerTitle}>Verify your email</Text>
           <Text style={styles.bannerDescription}>
-            Check your inbox for a verification link
+            Check your inbox for a verification link to unlock all features.
           </Text>
         </View>
       </View>
       
       <View style={styles.bannerActions}>
+        {/* Refresh button to check if verified */}
+        <TouchableOpacity
+          style={styles.refreshButton}
+          onPress={handleRefreshStatus}
+          disabled={isRefreshing}
+        >
+          {isRefreshing ? (
+            <ActivityIndicator size="small" color={colors.primary[600]} />
+          ) : (
+            <>
+              <Ionicons name="refresh" size={16} color={colors.primary[600]} />
+              <Text style={styles.refreshText}>I've verified</Text>
+            </>
+          )}
+        </TouchableOpacity>
+
         {showSuccess ? (
           <View style={styles.bannerSuccess}>
-            <Ionicons name="checkmark" size={16} color={colors.green[600]} />
+            <Ionicons name="checkmark-circle" size={16} color={colors.green[600]} />
             <Text style={styles.bannerSuccessText}>Sent!</Text>
           </View>
         ) : (
           <TouchableOpacity
-            style={styles.bannerResendButton}
+            style={[styles.bannerResendButton, resendCooldown > 0 && styles.bannerResendButtonDisabled]}
             onPress={handleResendEmail}
             disabled={resendCooldown > 0 || isResending}
           >
             {isResending ? (
-              <ActivityIndicator size="small" color={colors.amber[700]} />
+              <ActivityIndicator size="small" color={colors.white} />
             ) : (
-              <Text style={[styles.bannerResendText, resendCooldown > 0 && styles.bannerResendTextDisabled]}>
+              <Text style={styles.bannerResendText}>
                 {resendCooldown > 0 ? `${resendCooldown}s` : 'Resend'}
               </Text>
             )}
           </TouchableOpacity>
         )}
-        
-        <TouchableOpacity 
-          style={styles.refreshButton}
-          onPress={handleRefreshStatus}
-        >
-          <Ionicons name="refresh-outline" size={18} color={colors.amber[700]} />
-        </TouchableOpacity>
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  // Banner styles
+  banner: {
+    backgroundColor: colors.amber[50],
+    borderWidth: 1,
+    borderColor: colors.amber[200],
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  bannerContent: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  bannerIcon: {
+    marginRight: spacing.md,
+    marginTop: 2,
+  },
+  bannerTextContainer: {
+    flex: 1,
+  },
+  bannerTitle: {
+    ...typography.labelLg,
+    color: colors.amber[800],
+    marginBottom: spacing.xxs,
+  },
+  bannerDescription: {
+    ...typography.bodySm,
+    color: colors.amber[700],
+    lineHeight: 18,
+  },
+  bannerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: spacing.md,
+    marginLeft: 40, // Align with text
+    gap: spacing.sm,
+  },
+  refreshButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.primary[200],
+    gap: 4,
+  },
+  refreshText: {
+    ...typography.bodySm,
+    color: colors.primary[600],
+    fontWeight: '500',
+  },
+  bannerResendButton: {
+    backgroundColor: colors.amber[600],
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.md,
+    minWidth: 70,
+    alignItems: 'center',
+  },
+  bannerResendButtonDisabled: {
+    backgroundColor: colors.amber[400],
+  },
+  bannerResendText: {
+    ...typography.bodySm,
+    color: colors.white,
+    fontWeight: '600',
+  },
+  bannerSuccess: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  bannerSuccessText: {
+    ...typography.bodySm,
+    color: colors.green[600],
+    fontWeight: '500',
+  },
+
   // Modal styles
   modalOverlay: {
     flex: 1,
@@ -199,11 +319,11 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
   },
   modalContent: {
-    backgroundColor: colors.surface,
+    backgroundColor: colors.white,
     borderRadius: borderRadius.xl,
     padding: spacing.xl,
     width: '100%',
-    maxWidth: 340,
+    maxWidth: 400,
     alignItems: 'center',
   },
   modalIconContainer: {
@@ -216,19 +336,20 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   modalTitle: {
-    ...typography.displaySm,
+    ...typography.headingLg,
     color: colors.neutral[900],
-    textAlign: 'center',
     marginBottom: spacing.sm,
+    textAlign: 'center',
   },
   modalDescription: {
     ...typography.bodyMd,
     color: colors.neutral[600],
     textAlign: 'center',
     marginBottom: spacing.md,
+    lineHeight: 22,
   },
   emailText: {
-    color: colors.neutral[900],
+    color: colors.primary[600],
     fontWeight: '600',
   },
   modalSubtext: {
@@ -236,15 +357,16 @@ const styles = StyleSheet.create({
     color: colors.neutral[500],
     textAlign: 'center',
     marginBottom: spacing.lg,
+    lineHeight: 20,
   },
   successMessage: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
+    gap: spacing.sm,
     marginBottom: spacing.lg,
   },
   successText: {
-    ...typography.bodySm,
+    ...typography.bodyMd,
     color: colors.green[600],
     fontWeight: '500',
   },
@@ -256,96 +378,24 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   resendText: {
-    ...typography.bodySm,
+    ...typography.bodyMd,
     color: colors.primary[600],
     fontWeight: '500',
   },
   resendTextDisabled: {
     color: colors.neutral[400],
   },
-  continueButton: {
+  dismissButton: {
     backgroundColor: colors.primary[500],
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.xl,
     borderRadius: borderRadius.lg,
     width: '100%',
+    alignItems: 'center',
   },
-  continueButtonText: {
-    ...typography.labelLg,
+  dismissText: {
+    ...typography.bodyMd,
     color: colors.white,
-    textAlign: 'center',
     fontWeight: '600',
-  },
-
-  // Banner styles
-  banner: {
-    backgroundColor: colors.amber[50],
-    borderWidth: 1,
-    borderColor: colors.amber[200],
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.md,
-  },
-  bannerContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  bannerIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.amber[100],
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: spacing.sm,
-  },
-  bannerText: {
-    flex: 1,
-  },
-  bannerTitle: {
-    ...typography.labelMd,
-    color: colors.amber[800],
-    fontWeight: '600',
-  },
-  bannerDescription: {
-    ...typography.bodySm,
-    color: colors.amber[700],
-  },
-  bannerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  bannerSuccess: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  bannerSuccessText: {
-    ...typography.labelSm,
-    color: colors.green[600],
-    fontWeight: '500',
-  },
-  bannerResendButton: {
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.sm,
-  },
-  bannerResendText: {
-    ...typography.labelSm,
-    color: colors.amber[700],
-    fontWeight: '600',
-  },
-  bannerResendTextDisabled: {
-    color: colors.amber[400],
-  },
-  refreshButton: {
-    padding: spacing.xs,
   },
 });
-
-export default EmailVerificationBanner;
-
