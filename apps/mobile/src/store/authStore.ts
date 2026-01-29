@@ -111,9 +111,21 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // Set up auth state change listener (only once)
       supabase.auth.onAuthStateChange(async (event, session) => {
         console.log('Auth state change:', event);
-        
+
+        // When Supabase reports null session (e.g. TOKEN_REFRESHED failure or transient),
+        // try refresh once before clearing so we don't log the user out on blips (e.g. opening settings).
+        // Do NOT restore on explicit SIGNED_OUT or the sign-out button would appear to do nothing.
+        if (!session && get().session && event !== 'SIGNED_OUT') {
+          try {
+            await get().refreshSession();
+            if (get().session) return;
+          } catch (_) {
+            // Fall through to clear
+          }
+        }
+
         const isEmailVerified = !!session?.user?.email_confirmed_at;
-        
+
         set({
           session,
           user: session?.user ?? null,
@@ -130,7 +142,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
         // If user just verified their email, update state
         if (event === 'USER_UPDATED' && session?.user?.email_confirmed_at) {
-          set({ 
+          set({
             isEmailVerified: true,
             showEmailVerificationModal: false,
             pendingEmailVerification: false,
@@ -274,22 +286,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   signOut: async (): Promise<boolean> => {
-    try {
-      // Log out from subscription service (RevenueCat on mobile)
-      try {
-        await subscriptionService.logOut();
-      } catch (subError) {
-        console.log('Subscription service logout skipped (not initialized or error):', subError);
-        // Continue with sign out even if subscription service fails
-      }
-
-      // Sign out from Supabase (best-effort; clear local state even if server errors)
-      const { error } = await supabase.auth.signOut();
-      if (error) {
-        console.warn('Supabase signOut error (clearing local state anyway):', error);
-      }
-
-      // Always clear local state so UI can navigate home; treat sign-out as success
+    const clearStateAndReturn = () => {
       set({
         session: null,
         user: null,
@@ -299,21 +296,29 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         pendingEmailVerification: false,
         isInitialized: true, // Keep initialized so auth gate can redirect
       });
-
       return true;
+    };
+
+    try {
+      // Race: do sign-out work with a 4s timeout so we always clear and allow navigation
+      const signOutWork = async () => {
+        try {
+          await subscriptionService.logOut();
+        } catch (subError) {
+          console.log('Subscription service logout skipped (not initialized or error):', subError);
+        }
+        const { error } = await supabase.auth.signOut();
+        if (error) console.warn('Supabase signOut error (clearing local state anyway):', error);
+      };
+      await Promise.race([
+        signOutWork(),
+        new Promise<void>((resolve) => setTimeout(resolve, 4000)),
+      ]);
+
+      return clearStateAndReturn();
     } catch (error) {
       console.error('SignOut error:', error);
-      // Even on error, clear local state to allow user to get back to login
-      set({
-        session: null,
-        user: null,
-        isPremium: false,
-        isEmailVerified: true,
-        showEmailVerificationModal: false,
-        pendingEmailVerification: false,
-        isInitialized: true, // Keep initialized so auth gate can redirect
-      });
-      return true; // Return true to allow navigation even if there was an error
+      return clearStateAndReturn();
     }
   },
 }));

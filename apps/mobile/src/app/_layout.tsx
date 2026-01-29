@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { Slot, useRouter, useSegments } from 'expo-router';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
@@ -20,6 +20,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   const { isInitialized, isLoading, session, user, initialize } = useAuthStore();
   const segments = useSegments();
   const router = useRouter();
+  const hasSeenNonEmptySegments = useRef(false);
 
   useEffect(() => {
     // Initialize subscription service (handles RevenueCat on mobile, skips on web)
@@ -40,12 +41,17 @@ function AuthGate({ children }: { children: React.ReactNode }) {
       return;
     }
 
+    // Track if we've ever had non-empty segments (so we don't redirect on mid-navigation empty segments)
+    if (segments && segments.length > 0) {
+      hasSeenNonEmptySegments.current = true;
+    }
+
     // If segments is empty on web (Expo Router sometimes has empty segments on initial load),
-    // provide a default redirect after a brief delay
+    // provide a default redirect after a brief delay. Skip redirect when we've already seen
+    // non-empty segments (e.g. user tapped Profile -> Edit Profile and segments went empty briefly).
     if (!segments || segments.length === 0) {
-      // Small timeout to allow segments to populate, then fallback to default route
       const timeoutId = setTimeout(() => {
-        if (!segments || segments.length === 0) {
+        if (!hasSeenNonEmptySegments.current) {
           if (!session && !user) {
             router.replace('/(onboarding)/home');
           } else {
