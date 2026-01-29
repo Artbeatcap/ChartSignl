@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, Alert, Linking, Platform } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView, Alert, Platform } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Button, Input } from '../../components';
 import { supabase } from '../../lib/supabase';
@@ -16,52 +16,23 @@ export default function ResetPasswordScreen() {
 
   useEffect(() => {
     validateResetToken();
-  }, []);
+  }, [params]);
 
   const validateResetToken = async () => {
+    setIsValidating(true);
+    
     try {
-      // Extract tokens from URL (password reset links include tokens in hash or query params)
+      // Try to extract tokens from params
       let accessToken: string | null = null;
       let refreshToken: string | null = null;
       let tokenType: string | null = null;
 
-      // Try to get URL from params or window location
-      let url: string | null = null;
-      
-      if (Platform.OS === 'web' && typeof window !== 'undefined') {
-        // Web: tokens are in window.location.hash or search
-        url = window.location.href;
-      } else {
-        // Mobile: try to get from Linking or params
+      // Check if we have tokens in params or URL
+      if (params) {
         try {
-          const initialUrl = await Linking.getInitialURL();
-          if (initialUrl && initialUrl.includes('reset-password')) {
-            url = initialUrl;
-          }
-        } catch (e) {
-          // Ignore
-        }
-        
-        // Also check params
-        if (!url && params.url) {
-          url = params.url as string;
-        }
-      }
-
-      // Extract tokens from URL hash or query params
-      if (url) {
-        try {
-          // Handle hash fragments (#access_token=...)
-          if (url.includes('#')) {
-            const hash = url.split('#')[1];
-            const hashParams = new URLSearchParams(hash);
-            accessToken = hashParams.get('access_token');
-            refreshToken = hashParams.get('refresh_token');
-            tokenType = hashParams.get('type');
-          }
-          
-          // Handle query parameters (?access_token=...)
-          if (!accessToken && url.includes('?')) {
+          // Try extracting from URL fragment first (for deep links)
+          if (params.url) {
+            const url = params.url as string;
             const query = url.split('?')[1].split('#')[0];
             const queryParams = new URLSearchParams(query);
             accessToken = queryParams.get('access_token');
@@ -150,13 +121,14 @@ export default function ResetPasswordScreen() {
 
       if (error) throw error;
 
+      // Show success alert, then navigate to sign-in when user dismisses
       Alert.alert(
-        'Success',
-        'Your password has been reset successfully. You can now sign in with your new password.',
+        'Password Reset Successful! ✓',
+        'Your password has been changed successfully. You can now sign in with your new password.',
         [
           {
-            text: 'OK',
-            onPress: () => router.replace('/(onboarding)/account?mode=signin'),
+            text: 'Sign In',
+            onPress: () => router.replace('/(onboarding)/account'),
           },
         ]
       );
@@ -250,8 +222,14 @@ export default function ResetPasswordScreen() {
               size="lg"
               fullWidth
               loading={isLoading}
+              disabled={
+                isLoading || 
+                password.length < 8 || 
+                password !== confirmPassword ||
+                !password.trim() ||
+                !confirmPassword.trim()
+              }
               style={{ marginTop: spacing.lg }}
-              disabled={!password || !confirmPassword || password !== confirmPassword || password.length < 8}
             />
           </View>
         </View>
@@ -274,28 +252,29 @@ const styles = StyleSheet.create({
     paddingTop: spacing.xl,
     paddingBottom: spacing.xxl,
   },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    ...typography.bodyLg,
+    color: colors.neutral[600],
+  },
   content: {
     flex: 1,
     maxWidth: 400,
     width: '100%',
     alignSelf: 'center',
-  },
-  loadingContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  loadingText: {
-    ...typography.bodyMd,
-    color: colors.neutral[600],
+    paddingBottom: spacing.xxl,
   },
   iconContainer: {
     width: 80,
     height: 80,
     borderRadius: 40,
     backgroundColor: colors.primary[100],
-    alignItems: 'center',
     justifyContent: 'center',
+    alignItems: 'center',
     alignSelf: 'center',
     marginBottom: spacing.xl,
   },
@@ -305,8 +284,8 @@ const styles = StyleSheet.create({
   title: {
     ...typography.displayMd,
     color: colors.neutral[900],
-    marginBottom: spacing.sm,
     textAlign: 'center',
+    marginBottom: spacing.sm,
   },
   description: {
     ...typography.bodyMd,
@@ -325,8 +304,8 @@ const styles = StyleSheet.create({
   },
   requirementsTitle: {
     ...typography.labelMd,
-    fontWeight: '600',
     color: colors.neutral[700],
+    fontWeight: '600',
     marginBottom: spacing.xs,
   },
   requirement: {

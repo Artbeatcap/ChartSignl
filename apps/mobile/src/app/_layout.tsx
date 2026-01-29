@@ -17,7 +17,7 @@ const queryClient = new QueryClient({
 });
 
 function AuthGate({ children }: { children: React.ReactNode }) {
-  const { isInitialized, isLoading, session, initialize } = useAuthStore();
+  const { isInitialized, isLoading, session, user, initialize } = useAuthStore();
   const segments = useSegments();
   const router = useRouter();
 
@@ -36,24 +36,45 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   }, [initialize]);
 
   useEffect(() => {
-    if (!isInitialized || isLoading) return;
+    if (!isInitialized || isLoading) {
+      return;
+    }
+
+    // If segments is empty on web (Expo Router sometimes has empty segments on initial load),
+    // provide a default redirect after a brief delay
+    if (!segments || segments.length === 0) {
+      // Small timeout to allow segments to populate, then fallback to default route
+      const timeoutId = setTimeout(() => {
+        if (!segments || segments.length === 0) {
+          if (!session && !user) {
+            router.replace('/(onboarding)/home');
+          } else {
+            router.replace('/(tabs)/analyze');
+          }
+        }
+      }, 100);
+      
+      return () => clearTimeout(timeoutId);
+    }
 
     // Define which route groups don't require auth
-    const inAuthGroup = segments[0] === '(onboarding)' || segments[0] === 'auth';
+    // Include (settings) so privacy/terms pages are accessible without authentication
+    const inAuthGroup = segments[0] === '(onboarding)' || segments[0] === 'auth' || segments[0] === '(settings)';
     
     // Exclude reset-password from redirect - it needs a session (from recovery token) but user should stay on screen
     const isResetPassword = segments[0] === 'auth' && segments[1] === 'reset-password';
     
-    if (!session && !inAuthGroup) {
+    const hasAuth = session || user;
+    if (!hasAuth && !inAuthGroup) {
       // User is not signed in and trying to access protected route
       // Redirect to welcome/onboarding
       router.replace('/(onboarding)/home');
-    } else if (session && inAuthGroup && !isResetPassword) {
+    } else if (hasAuth && inAuthGroup && !isResetPassword) {
       // User is signed in but on an auth screen (except reset-password)
       // Redirect to main app
       router.replace('/(tabs)/analyze');
     }
-  }, [isInitialized, isLoading, session, segments, router]);
+  }, [isInitialized, isLoading, session, user, segments, router]);
 
   // Show loading screen while initializing
   if (!isInitialized || isLoading) {

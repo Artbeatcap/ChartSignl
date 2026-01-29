@@ -15,6 +15,7 @@ interface AuthState {
   
   // Actions
   setSession: (session: Session | null) => void;
+  setUserPendingVerification: (user: User) => void;
   initialize: () => Promise<void>;
   signOut: () => Promise<boolean>;
   checkSubscriptionStatus: () => Promise<boolean>;
@@ -51,6 +52,18 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
+  setUserPendingVerification: (user) => {
+    const isEmailVerified = !!user?.email_confirmed_at;
+    set({
+      session: null,
+      user,
+      isLoading: false,
+      isInitialized: true,
+      isEmailVerified,
+      pendingEmailVerification: !isEmailVerified,
+    });
+  },
+
   initialize: async () => {
     // Prevent multiple simultaneous initializations - only check isInitialized
     if (get().isInitialized) {
@@ -65,8 +78,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ isLoading: true });
     
     try {
-      // Get initial session
-      const { data: { session }, error } = await supabase.auth.getSession();
+      // Get initial session with timeout to prevent hanging
+      const sessionPromise = supabase.auth.getSession();
+      const timeoutPromise = new Promise<{ data: { session: null }, error: null }>((resolve) => {
+        setTimeout(() => resolve({ data: { session: null }, error: null }), 5000);
+      });
+      
+      const { data: { session }, error } = await Promise.race([sessionPromise, timeoutPromise]);
       
       if (error) {
         console.error('Error getting session:', error);
@@ -82,9 +100,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         isEmailVerified,
       });
 
-      // Check subscription status if user is logged in
+      // Check subscription status if user is logged in (don't await to prevent blocking)
       if (session?.user) {
-        await get().checkSubscriptionStatus();
+        get().checkSubscriptionStatus().catch((err) => {
+          console.error('Error checking subscription status during init:', err);
+        });
       }
 
       // Set up auth state change listener (only once)
@@ -199,15 +219,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         console.log('Subscription service logout skipped (not initialized or error):', subError);
         // Continue with sign out even if subscription service fails
       }
-      
-      // Sign out from Supabase
+
+      // Sign out from Supabase (best-effort; clear local state even if server errors)
       const { error } = await supabase.auth.signOut();
       if (error) {
-        console.error('Supabase signOut error:', error);
-        return false;
+        console.warn('Supabase signOut error (clearing local state anyway):', error);
       }
-      
-      // Clear local state
+
+      // Always clear local state so UI can navigate home; treat sign-out as success
       set({
         session: null,
         user: null,
@@ -216,7 +235,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         showEmailVerificationModal: false,
         pendingEmailVerification: false,
       });
-      
+
       return true;
     } catch (error) {
       console.error('SignOut error:', error);

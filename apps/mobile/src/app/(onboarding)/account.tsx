@@ -35,7 +35,7 @@ const ENABLE_SOCIAL_AUTH = false;
 export default function AccountScreen() {
   const router = useRouter();
   const { answers } = useOnboardingStore();
-  const { setPendingEmailVerification } = useAuthStore();
+  const { setPendingEmailVerification, setSession, setUserPendingVerification } = useAuthStore();
   
   // Flow state
   const [step, setStep] = useState<AuthStep>('email');
@@ -45,120 +45,74 @@ export default function AccountScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  
-  // UI state
+  const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isCheckingEmail, setIsCheckingEmail] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   
   // Refs
   const passwordInputRef = useRef<TextInput>(null);
   const confirmPasswordInputRef = useRef<TextInput>(null);
 
-  // Focus password field when moving to password step
+  // Focus password input when step changes to password
   useEffect(() => {
     if (step === 'password') {
       setTimeout(() => passwordInputRef.current?.focus(), 100);
     }
   }, [step]);
 
-  // Check if email exists in the system
-  // Prefers backend endpoint (more reliable), falls back to client-side method
-  const checkEmailExists = async (emailToCheck: string): Promise<boolean> => {
+  // Check if email exists in database (backend check-email is reliable; Supabase signIn returns same error for new vs wrong password)
+  const handleEmailSubmit = async () => {
+    if (!email.trim()) {
+      setError('Please enter your email');
+      return;
+    }
+
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      setError('Please enter a valid email address');
+      return;
+    }
+
+    setIsCheckingEmail(true);
+    setError(null);
+
     try {
-      // Try backend endpoint first (more reliable, avoids rate limiting)
+      const normalizedEmail = email.trim().toLowerCase();
+      let exists = false;
+
       try {
         const response = await fetch(`${API_URL}/api/auth/check-email`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: emailToCheck }),
+          body: JSON.stringify({ email: normalizedEmail }),
         });
-        
         if (response.ok) {
           const data = await response.json();
-          return data.exists === true;
+          exists = data.exists === true;
         }
-      } catch (backendError) {
-        console.log('Backend email check failed, falling back to client-side method:', backendError);
-        // Fall through to client-side method
+      } catch (_) {
+        // Network/backend error: default to new so user can try sign up
       }
 
-      // Fallback: Use Supabase's signInWithPassword to check if user exists
-      // This doesn't actually sign in, but tells us if user exists based on error
-      const { error } = await supabase.auth.signInWithPassword({
-        email: emailToCheck,
-        password: '___CHECK_ONLY___', // Intentionally wrong
-      });
-      
-      if (error) {
-        // "Invalid login credentials" = user exists but wrong password
-        // "User not found" or similar = user doesn't exist
-        const errorMsg = error.message.toLowerCase();
-        
-        if (errorMsg.includes('invalid login credentials') || 
-            errorMsg.includes('invalid credentials')) {
-          // User exists
-          return true;
-        }
-        
-        if (errorMsg.includes('user not found') || 
-            errorMsg.includes('no user found') ||
-            errorMsg.includes('email not confirmed')) {
-          // User doesn't exist or unconfirmed
-          return false;
-        }
-        
-        // For other errors, assume user might exist to be safe
-        // This prevents account enumeration attacks
-        console.log('Email check error:', error.message);
-        return false;
-      }
-      
-      // Shouldn't get here, but if we do, user exists
-      return true;
-    } catch (err) {
-      console.error('Error checking email:', err);
-      return false;
-    }
-  };
-
-  // Handle email submission - check if account exists
-  const handleEmailSubmit = async () => {
-    const trimmedEmail = email.trim().toLowerCase();
-    
-    if (!trimmedEmail) {
-      setError('Please enter your email');
-      return;
-    }
-    
-    // Basic email validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(trimmedEmail)) {
-      setError('Please enter a valid email address');
-      return;
-    }
-    
-    setIsCheckingEmail(true);
-    setError(null);
-    
-    try {
-      const exists = await checkEmailExists(trimmedEmail);
       setAccountStatus(exists ? 'exists' : 'new');
       setStep('password');
     } catch (err) {
-      setError('Unable to verify email. Please try again.');
+      console.error('Email check error:', err);
+      setAccountStatus('new');
+      setStep('password');
     } finally {
       setIsCheckingEmail(false);
     }
   };
 
-  // Handle going back to email step
+  // Go back to email step
   const handleBackToEmail = () => {
     setStep('email');
-    setAccountStatus('unknown');
     setPassword('');
     setConfirmPassword('');
     setError(null);
+    setAccountStatus('unknown');
   };
 
   // Handle sign in (existing user)
@@ -179,15 +133,17 @@ export default function AccountScreen() {
 
       if (signInError) throw signInError;
 
-      if (data.user) {
-        // Check if user needs email verification
-        if (!data.user.email_confirmed_at) {
-          setPendingEmailVerification(true);
-        }
-        // Navigation handled by root layout auth gate
+      if (data.session) {
+        // Explicitly update auth store
+        setSession(data.session);
+        
+        // Navigation will be handled by root layout auth gate
+        // But we could explicitly navigate for better UX
+        router.replace('/(tabs)/analyze');
       }
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Sign in failed';
+      const errorMessage = err instanceof Error ? 
+        err.message : 'Sign in failed';
       
       if (errorMessage.toLowerCase().includes('invalid login credentials')) {
         setError('Incorrect password. Please try again.');
@@ -206,8 +162,8 @@ export default function AccountScreen() {
       return;
     }
     
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters');
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters');
       return;
     }
     
@@ -239,7 +195,9 @@ export default function AccountScreen() {
 
       if (data.user) {
         // Check if email confirmation is required
-        if (!data.user.email_confirmed_at) {
+        const needsEmailVerification = !data.user.email_confirmed_at;
+        
+        if (needsEmailVerification) {
           setPendingEmailVerification(true);
         }
 
@@ -254,11 +212,38 @@ export default function AccountScreen() {
           // Don't block auth flow for profile save failure
         }
 
-        // Navigation handled by root layout auth gate
+        // Explicitly update auth store: session when available, else user pending verification
+        if (data.session) {
+          setSession(data.session);
+        } else if (data.user) {
+          setUserPendingVerification(data.user);
+        }
+
+        // Success notification: user sees confirmation before being taken to the app
+        // Alert.alert does not work on web (RN/Expo); use window.alert then navigate
+        const message = needsEmailVerification
+          ? 'Welcome to ChartSignl! Please check your email to verify your account.'
+          : 'Welcome to ChartSignl! Your account has been created successfully.';
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+          window.alert('Account Created! 🎉\n\n' + message);
+          router.replace('/(tabs)/analyze');
+        } else {
+          Alert.alert(
+            'Account Created! 🎉',
+            message,
+            [
+              {
+                text: 'Get Started',
+                onPress: () => router.replace('/(tabs)/analyze'),
+              },
+            ]
+          );
+        }
       }
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Sign up failed';
-      
+      const errorMessage = err instanceof Error ? 
+        err.message : 'Sign up failed';
+
       // Handle email configuration issues
       if (errorMessage.includes('confirmation email') || errorMessage.includes('Error sending')) {
         if (Platform.OS !== 'web') {
@@ -506,7 +491,7 @@ export default function AccountScreen() {
         <TextInput
           ref={passwordInputRef}
           style={styles.input}
-          placeholder="Create a password (min 6 characters)"
+          placeholder="Create a password (min 8 characters)"
           placeholderTextColor={colors.neutral[400]}
           value={password}
           onChangeText={(text) => {
@@ -603,30 +588,33 @@ export default function AccountScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.keyboardView}
-      >
-        <View style={styles.webWrapper}>
-          <View style={styles.webInner}>
-            {/* Progress Indicator - only show during onboarding */}
-            <View style={styles.progressContainer}>
-              <ProgressIndicator current={5} total={5} />
-            </View>
-
+      <View style={styles.webWrapper}>
+        <View style={styles.webInner}>
+          <KeyboardAvoidingView 
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={styles.keyboardView}
+          >
             <ScrollView 
               style={styles.scrollView}
               contentContainerStyle={styles.scrollContent}
-              keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
             >
-              {step === 'email' && renderEmailStep()}
-              {step === 'password' && accountStatus === 'exists' && renderSignInStep()}
-              {step === 'password' && accountStatus === 'new' && renderSignUpStep()}
+              {/* Progress Indicator */}
+              <View style={styles.progressContainer}>
+                <ProgressIndicator current={4} total={4} />
+              </View>
+
+              {/* Content */}
+              <View style={styles.content}>
+                {step === 'email' && renderEmailStep()}
+                {step === 'password' && accountStatus === 'exists' && renderSignInStep()}
+                {step === 'password' && accountStatus === 'new' && renderSignUpStep()}
+              </View>
             </ScrollView>
-          </View>
+          </KeyboardAvoidingView>
         </View>
-      </KeyboardAvoidingView>
+      </View>
     </SafeAreaView>
   );
 }
@@ -638,9 +626,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  keyboardView: {
-    flex: 1,
-  },
   webWrapper: {
     flex: 1,
     width: '100%',
@@ -651,20 +636,29 @@ const styles = StyleSheet.create({
     width: '100%',
     ...(Platform.OS === 'web' && { maxWidth: WEB_MAX_WIDTH }),
   },
-  progressContainer: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
+  keyboardView: {
+    flex: 1,
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
+    flexGrow: 1,
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.xl,
     paddingBottom: spacing.xxl,
   },
-  // Back button
+  progressContainer: {
+    paddingTop: spacing.md,
+    paddingBottom: spacing.md,
+  },
+  content: {
+    flex: 1,
+    gap: spacing.md,
+    paddingBottom: spacing.xxl,
+  },
   backButton: {
+    alignSelf: 'flex-start',
     marginBottom: spacing.md,
   },
   backButtonText: {
@@ -672,25 +666,22 @@ const styles = StyleSheet.create({
     color: colors.primary[600],
     fontWeight: '600',
   },
-  // Headers
   title: {
     ...typography.displayMd,
     color: colors.neutral[900],
-    marginBottom: spacing.sm,
+    marginBottom: spacing.xs,
   },
   subtitle: {
     ...typography.bodyLg,
     color: colors.neutral[600],
-    marginBottom: spacing.xl,
-    lineHeight: 24,
+    marginBottom: spacing.md,
   },
   emailHighlight: {
     color: colors.primary[600],
     fontWeight: '600',
   },
-  // Input styles
   inputContainer: {
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
   },
   inputLabel: {
     ...typography.labelMd,
@@ -698,36 +689,31 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
   },
   input: {
-    height: 52,
-    backgroundColor: colors.surface,
-    borderWidth: 2,
-    borderColor: colors.neutral[200],
-    borderRadius: borderRadius.lg,
-    paddingHorizontal: spacing.md,
     ...typography.bodyMd,
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
     color: colors.neutral[900],
   },
-  // Forgot password
   forgotPassword: {
-    ...typography.bodySm,
+    ...typography.bodyMd,
     color: colors.primary[600],
-    fontWeight: '500',
     textAlign: 'right',
+    marginTop: -spacing.sm,
     marginBottom: spacing.md,
   },
-  // Error
   errorText: {
     ...typography.bodySm,
     color: colors.error,
-    marginBottom: spacing.md,
-    textAlign: 'center',
+    marginTop: -spacing.sm,
+    marginBottom: spacing.sm,
   },
-  // Primary button
   primaryButton: {
     marginTop: spacing.sm,
-    marginBottom: spacing.lg,
   },
-  // Divider
   divider: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -741,9 +727,8 @@ const styles = StyleSheet.create({
   dividerText: {
     ...typography.bodySm,
     color: colors.neutral[500],
-    paddingHorizontal: spacing.md,
+    marginHorizontal: spacing.md,
   },
-  // Social buttons
   socialButtons: {
     flexDirection: 'row',
     gap: spacing.md,
@@ -753,33 +738,27 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    height: 52,
-    backgroundColor: colors.surface,
-    borderWidth: 2,
-    borderColor: colors.neutral[200],
-    borderRadius: borderRadius.lg,
     gap: spacing.sm,
-  },
-  socialButtonIcon: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.neutral[700],
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
   },
   socialButtonText: {
     ...typography.bodyMd,
     color: colors.neutral[700],
     fontWeight: '600',
   },
-  // Terms
   termsText: {
     ...typography.bodySm,
     color: colors.neutral[500],
     textAlign: 'center',
     marginTop: spacing.lg,
-    lineHeight: 20,
   },
   termsLink: {
     color: colors.primary[600],
-    fontWeight: '500',
+    textDecorationLine: 'underline',
   },
 });

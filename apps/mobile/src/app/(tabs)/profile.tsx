@@ -69,14 +69,14 @@ export default function ProfileScreen() {
   const performSignOut = async () => {
     try {
       const success = await signOut();
-      
+
       if (success) {
         // Clear React Query cache after successful sign out
         queryClient.clear();
-        
+
         // Use setTimeout to ensure state updates have propagated
         setTimeout(() => {
-          router.replace('/');
+          router.replace('/(onboarding)/home');
         }, 100);
       } else {
         Alert.alert('Error', 'Failed to sign out. Please try again.');
