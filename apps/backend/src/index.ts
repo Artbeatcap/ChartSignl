@@ -47,7 +47,19 @@ app.use('*', logger());
 
 // Request logging middleware
 app.use('*', async (c, next) => {
-  console.log('[MIDDLEWARE] Incoming request:', c.req.method, c.req.path, c.req.url);
+  const origin = c.req.header('origin');
+  // #region agent log
+  console.log('[DEBUG REQ] Request received:', {
+    method: c.req.method,
+    path: c.req.path,
+    url: c.req.url,
+    origin,
+    hasOriginHeader: !!origin,
+    allHeaders: Object.fromEntries(c.req.raw.headers.entries())
+  });
+  fetch('http://127.0.0.1:7243/ingest/40355958-aed9-4b22-9cb1-0b68d3805912',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'index.ts:50',message:'Request received',data:{method:c.req.method,path:c.req.path,url:c.req.url,origin,hasOriginHeader:!!origin},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A'})}).catch(()=>{});
+  // #endregion
+  console.log('[MIDDLEWARE] Incoming request:', c.req.method, c.req.path, c.req.url, 'Origin:', origin);
   await next();
 });
 
@@ -66,48 +78,30 @@ const envOrigins = process.env.CORS_ORIGINS?.split(',').map(o => o.trim()).filte
 const corsOrigins = [...new Set([...envOrigins, ...defaultOrigins])]; // Remove duplicates
 
 // #region agent log
-import { appendFileSync } from 'fs';
-try {
-  const logPath = 'c:\\Users\\Art\\VScode\\chartsignl_80eb2710\\.cursor\\debug.log';
-  appendFileSync(logPath, JSON.stringify({
-    location: 'index.ts:55',
-    message: 'CORS origins configured',
-    data: {
-      envOrigins,
-      defaultOrigins,
-      corsOrigins,
-      hasWww: corsOrigins.includes('https://www.chartsignl.com'),
-      envVarSet: !!process.env.CORS_ORIGINS,
-    },
-    timestamp: Date.now(),
-    sessionId: 'debug-session',
-    runId: 'run1',
-    hypothesisId: 'A'
-  }) + '\n');
-} catch (e) {}
+console.log('[DEBUG CORS] CORS config initialized:', {
+  envOrigins,
+  defaultOrigins,
+  corsOrigins,
+  corsOriginsEnv: process.env.CORS_ORIGINS,
+  corsOriginsCount: corsOrigins.length
+});
+fetch('http://127.0.0.1:7243/ingest/40355958-aed9-4b22-9cb1-0b68d3805912',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'index.ts:66',message:'CORS config initialized',data:{envOrigins,defaultOrigins,corsOrigins,corsOriginsEnv:process.env.CORS_ORIGINS},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'C'})}).catch(()=>{});
 // #endregion
 
 app.use('*', cors({
   origin: (origin) => {
     // #region agent log
-    try {
-      const logPath = 'c:\\Users\\Art\\VScode\\chartsignl_80eb2710\\.cursor\\debug.log';
-      appendFileSync(logPath, JSON.stringify({
-        location: 'index.ts:75',
-        message: 'CORS origin check',
-        data: {
-          origin,
-          isAllowed: corsOrigins.includes(origin || ''),
-          corsOrigins,
-        },
-        timestamp: Date.now(),
-        sessionId: 'debug-session',
-        runId: 'run1',
-        hypothesisId: 'B'
-      }) + '\n');
-    } catch (e) {}
+    const isInList = corsOrigins.includes(origin || '');
+    const result = !origin ? corsOrigins[0] : (isInList ? origin : null);
+    console.log('[DEBUG CORS] Origin check:', {
+      origin,
+      hasOrigin: !!origin,
+      isInList,
+      corsOrigins,
+      result
+    });
+    fetch('http://127.0.0.1:7243/ingest/40355958-aed9-4b22-9cb1-0b68d3805912',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'index.ts:72',message:'CORS origin check',data:{origin,hasOrigin:!!origin,isInList:corsOrigins.includes(origin||''),corsOrigins,result},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'D'})}).catch(()=>{});
     // #endregion
-    
     if (!origin) return corsOrigins[0];
     return corsOrigins.includes(origin) ? origin : null;
   },
@@ -192,6 +186,16 @@ if (missingVars.length > 0) {
 // Start server
 const port = parseInt(process.env.PORT || '4000');
 
+// #region agent log
+console.log('[DEBUG SERVER] Server starting:', {
+  port,
+  nodeEnv: process.env.NODE_ENV,
+  corsOriginsEnv: process.env.CORS_ORIGINS,
+  corsOrigins
+});
+fetch('http://127.0.0.1:7243/ingest/40355958-aed9-4b22-9cb1-0b68d3805912',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'index.ts:152',message:'Server starting',data:{port,nodeEnv:process.env.NODE_ENV,corsOriginsEnv:process.env.CORS_ORIGINS,corsOrigins},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'B'})}).catch(()=>{});
+// #endregion
+
 console.log(`
 ╔═══════════════════════════════════════════════════╗
 ║                                                   ║
@@ -199,6 +203,7 @@ console.log(`
 ║                                                   ║
 ║   Running on: http://localhost:${port}              ║
 ║   Environment: ${process.env.NODE_ENV || 'development'}                    ║
+║   CORS Origins: ${corsOrigins.join(', ')}         ║
 ║                                                   ║
 ╚═══════════════════════════════════════════════════╝
 `);
@@ -206,6 +211,16 @@ console.log(`
 serve({
   fetch: app.fetch,
   port,
+}).then(() => {
+  // #region agent log
+  console.log('[DEBUG SERVER] Server started successfully on port', port);
+  fetch('http://127.0.0.1:7243/ingest/40355958-aed9-4b22-9cb1-0b68d3805912',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'index.ts:168',message:'Server started successfully',data:{port},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'B'})}).catch(()=>{});
+  // #endregion
+}).catch((err) => {
+  // #region agent log
+  console.error('[DEBUG SERVER] Server start failed:', err);
+  fetch('http://127.0.0.1:7243/ingest/40355958-aed9-4b22-9cb1-0b68d3805912',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'index.ts:172',message:'Server start failed',data:{port,error:err.message,stack:err.stack},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'B'})}).catch(()=>{});
+  // #endregion
 });
 
 export default app;

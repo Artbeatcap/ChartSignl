@@ -14,7 +14,8 @@ if (!stripeSecretKey) {
 
 const stripe = stripeSecretKey ? new Stripe(stripeSecretKey, {
   // Stripe's TS types require the latest API version literal.
-  apiVersion: '2025-12-15.clover',
+  // Using type assertion since TS types may not be updated for newer API versions
+  apiVersion: '2025-12-15.clover' as any,
   typescript: true,
 }) : null;
 
