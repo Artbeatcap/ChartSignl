@@ -20,8 +20,7 @@ import { useAuthStore } from '../../store/authStore';
 import { supabase } from '../../lib/supabase';
 import { updateProfile } from '../../lib/api';
 import { colors, typography, spacing, borderRadius } from '../../theme';
-
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:4000';
+import { API_URL } from '../../lib/apiConfig';
 
 // Complete auth session in browser
 WebBrowser.maybeCompleteAuthSession();
@@ -29,6 +28,9 @@ WebBrowser.maybeCompleteAuthSession();
 // Auth flow states
 type AuthStep = 'email' | 'password';
 type AccountStatus = 'unknown' | 'exists' | 'new';
+
+// Feature flag: Set to true when OAuth providers are approved
+const ENABLE_SOCIAL_AUTH = false;
 
 export default function AccountScreen() {
   const router = useRouter();
@@ -366,33 +368,37 @@ export default function AccountScreen() {
         style={styles.primaryButton}
       />
 
-      {/* Divider */}
-      <View style={styles.divider}>
-        <View style={styles.dividerLine} />
-        <Text style={styles.dividerText}>or continue with</Text>
-        <View style={styles.dividerLine} />
-      </View>
+      {ENABLE_SOCIAL_AUTH && (
+        <>
+          {/* Divider */}
+          <View style={styles.divider}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>or continue with</Text>
+            <View style={styles.dividerLine} />
+          </View>
 
-      {/* Social Auth Buttons */}
-      <View style={styles.socialButtons}>
-        <TouchableOpacity
-          style={styles.socialButton}
-          onPress={() => handleSocialAuth('google')}
-          disabled={isLoading}
-        >
-          <GoogleLogo size={18} />
-          <Text style={styles.socialButtonText}>Google</Text>
-        </TouchableOpacity>
+          {/* Social Auth Buttons */}
+          <View style={styles.socialButtons}>
+            <TouchableOpacity
+              style={styles.socialButton}
+              onPress={() => handleSocialAuth('google')}
+              disabled={isLoading}
+            >
+              <GoogleLogo size={18} />
+              <Text style={styles.socialButtonText}>Google</Text>
+            </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.socialButton}
-          onPress={() => handleSocialAuth('apple')}
-          disabled={isLoading}
-        >
-          <AppleLogo size={18} />
-          <Text style={styles.socialButtonText}>Apple</Text>
-        </TouchableOpacity>
-      </View>
+            <TouchableOpacity
+              style={styles.socialButton}
+              onPress={() => handleSocialAuth('apple')}
+              disabled={isLoading}
+            >
+              <AppleLogo size={18} />
+              <Text style={styles.socialButtonText}>Apple</Text>
+            </TouchableOpacity>
+          </View>
+        </>
+      )}
     </>
   );
 
@@ -447,33 +453,37 @@ export default function AccountScreen() {
         style={styles.primaryButton}
       />
 
-      {/* Divider */}
-      <View style={styles.divider}>
-        <View style={styles.dividerLine} />
-        <Text style={styles.dividerText}>or continue with</Text>
-        <View style={styles.dividerLine} />
-      </View>
+      {ENABLE_SOCIAL_AUTH && (
+        <>
+          {/* Divider */}
+          <View style={styles.divider}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>or continue with</Text>
+            <View style={styles.dividerLine} />
+          </View>
 
-      {/* Social Auth Buttons */}
-      <View style={styles.socialButtons}>
-        <TouchableOpacity
-          style={styles.socialButton}
-          onPress={() => handleSocialAuth('google')}
-          disabled={isLoading}
-        >
-          <GoogleLogo size={18} />
-          <Text style={styles.socialButtonText}>Google</Text>
-        </TouchableOpacity>
+          {/* Social Auth Buttons */}
+          <View style={styles.socialButtons}>
+            <TouchableOpacity
+              style={styles.socialButton}
+              onPress={() => handleSocialAuth('google')}
+              disabled={isLoading}
+            >
+              <GoogleLogo size={18} />
+              <Text style={styles.socialButtonText}>Google</Text>
+            </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.socialButton}
-          onPress={() => handleSocialAuth('apple')}
-          disabled={isLoading}
-        >
-          <AppleLogo size={18} />
-          <Text style={styles.socialButtonText}>Apple</Text>
-        </TouchableOpacity>
-      </View>
+            <TouchableOpacity
+              style={styles.socialButton}
+              onPress={() => handleSocialAuth('apple')}
+              disabled={isLoading}
+            >
+              <AppleLogo size={18} />
+              <Text style={styles.socialButtonText}>Apple</Text>
+            </TouchableOpacity>
+          </View>
+        </>
+      )}
     </>
   );
 
@@ -545,33 +555,37 @@ export default function AccountScreen() {
         style={styles.primaryButton}
       />
 
-      {/* Divider */}
-      <View style={styles.divider}>
-        <View style={styles.dividerLine} />
-        <Text style={styles.dividerText}>or continue with</Text>
-        <View style={styles.dividerLine} />
-      </View>
+      {ENABLE_SOCIAL_AUTH && (
+        <>
+          {/* Divider */}
+          <View style={styles.divider}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>or continue with</Text>
+            <View style={styles.dividerLine} />
+          </View>
 
-      {/* Social Auth Buttons */}
-      <View style={styles.socialButtons}>
-        <TouchableOpacity
-          style={styles.socialButton}
-          onPress={() => handleSocialAuth('google')}
-          disabled={isLoading}
-        >
-          <GoogleLogo size={18} />
-          <Text style={styles.socialButtonText}>Google</Text>
-        </TouchableOpacity>
+          {/* Social Auth Buttons */}
+          <View style={styles.socialButtons}>
+            <TouchableOpacity
+              style={styles.socialButton}
+              onPress={() => handleSocialAuth('google')}
+              disabled={isLoading}
+            >
+              <GoogleLogo size={18} />
+              <Text style={styles.socialButtonText}>Google</Text>
+            </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.socialButton}
-          onPress={() => handleSocialAuth('apple')}
-          disabled={isLoading}
-        >
-          <AppleLogo size={18} />
-          <Text style={styles.socialButtonText}>Apple</Text>
-        </TouchableOpacity>
-      </View>
+            <TouchableOpacity
+              style={styles.socialButton}
+              onPress={() => handleSocialAuth('apple')}
+              disabled={isLoading}
+            >
+              <AppleLogo size={18} />
+              <Text style={styles.socialButtonText}>Apple</Text>
+            </TouchableOpacity>
+          </View>
+        </>
+      )}
 
       {/* Terms */}
       <Text style={styles.termsText}>
