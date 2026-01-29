@@ -208,19 +208,19 @@ console.log(`
 ╚═══════════════════════════════════════════════════╝
 `);
 
+// #region agent log
+console.log('[DEBUG SERVER] Starting server on port', port);
+fetch('http://127.0.0.1:7243/ingest/40355958-aed9-4b22-9cb1-0b68d3805912',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'index.ts:211',message:'Calling serve()',data:{port},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'B'})}).catch(()=>{});
+// #endregion
+
 serve({
   fetch: app.fetch,
   port,
-}).then(() => {
-  // #region agent log
-  console.log('[DEBUG SERVER] Server started successfully on port', port);
-  fetch('http://127.0.0.1:7243/ingest/40355958-aed9-4b22-9cb1-0b68d3805912',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'index.ts:168',message:'Server started successfully',data:{port},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'B'})}).catch(()=>{});
-  // #endregion
-}).catch((err) => {
-  // #region agent log
-  console.error('[DEBUG SERVER] Server start failed:', err);
-  fetch('http://127.0.0.1:7243/ingest/40355958-aed9-4b22-9cb1-0b68d3805912',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'index.ts:172',message:'Server start failed',data:{port,error:err.message,stack:err.stack},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'B'})}).catch(()=>{});
-  // #endregion
 });
+
+// #region agent log
+console.log('[DEBUG SERVER] serve() called, server should be starting');
+fetch('http://127.0.0.1:7243/ingest/40355958-aed9-4b22-9cb1-0b68d3805912',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'index.ts:218',message:'serve() called successfully',data:{port},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'B'})}).catch(()=>{});
+// #endregion
 
 export default app;
