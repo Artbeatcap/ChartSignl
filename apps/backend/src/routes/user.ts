@@ -5,6 +5,17 @@ import { FREE_ANALYSIS_LIMIT } from '@chartsignl/core';
 
 const userRoute = new Hono();
 
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
+function getEffectiveUsedThisWeek(
+  usage: { free_analyses_used: number; last_analysis_at: string | null } | null | undefined
+): number {
+  if (!usage) return 0;
+  if (!usage.last_analysis_at) return 0;
+  const elapsed = Date.now() - new Date(usage.last_analysis_at).getTime();
+  return elapsed < WEEK_MS ? usage.free_analyses_used : 0;
+}
+
 // GET /api/user/me - Get current user profile
 userRoute.get('/me', async (c) => {
   try {
@@ -39,12 +50,14 @@ userRoute.get('/me', async (c) => {
       }, 404);
     }
 
-    // Also get usage
+    // Also get usage (maybeSingle: no error when 0 rows)
     const { data: usage } = await supabaseAdmin
       .from('usage_counters')
-      .select('free_analyses_used')
+      .select('free_analyses_used, last_analysis_at')
       .eq('user_id', userId)
-      .single();
+      .maybeSingle();
+
+    const effectiveUsed = getEffectiveUsedThisWeek(usage ?? undefined);
 
     return c.json<AuthResponse>({
       success: true,
@@ -57,7 +70,7 @@ userRoute.get('/me', async (c) => {
         experienceLevel: profile.experience_level,
         stressReducer: profile.stress_reducer,
         isPro: profile.is_pro || false,
-        freeAnalysesUsed: usage?.free_analyses_used || 0,
+        freeAnalysesUsed: effectiveUsed,
       },
     });
 
@@ -156,13 +169,15 @@ userRoute.get('/usage', async (c) => {
 
     const { data: usage } = await supabaseAdmin
       .from('usage_counters')
-      .select('free_analyses_used')
+      .select('free_analyses_used, last_analysis_at')
       .eq('user_id', userId)
-      .single();
+      .maybeSingle();
+
+    const effectiveUsed = getEffectiveUsedThisWeek(usage ?? undefined);
 
     return c.json<UsageResponse>({
       success: true,
-      freeAnalysesUsed: usage?.free_analyses_used || 0,
+      freeAnalysesUsed: effectiveUsed,
       freeAnalysesLimit: FREE_ANALYSIS_LIMIT,
       isPro: profile?.is_pro || false,
     });

@@ -31,6 +31,18 @@ const openai = new OpenAI({
 
 const analyzeDataRoute = new Hono();
 
+/** 7 days in ms for weekly free-analysis reset */
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
+function getEffectiveUsedThisWeek(
+  usage: { free_analyses_used: number; last_analysis_at: string | null } | null | undefined
+): number {
+  if (!usage) return 0;
+  if (!usage.last_analysis_at) return 0;
+  const elapsed = Date.now() - new Date(usage.last_analysis_at).getTime();
+  return elapsed < WEEK_MS ? usage.free_analyses_used : 0;
+}
+
 // ============================================================================
 // AI PROMPT TEMPLATES
 // ============================================================================
@@ -167,14 +179,16 @@ analyzeDataRoute.post('/', async (c) => {
       .eq('id', userId)
       .single();
 
-    // Check usage limits
+    // Check usage limits (maybeSingle: no error when 0 rows, so we can upsert later)
     const { data: usage } = await supabaseAdmin
       .from('usage_counters')
-      .select('free_analyses_used')
+      .select('free_analyses_used, last_analysis_at')
       .eq('user_id', userId)
-      .single();
+      .maybeSingle();
 
-    if (!profile?.is_pro && (usage?.free_analyses_used || 0) >= FREE_ANALYSIS_LIMIT) {
+    const effectiveUsed = getEffectiveUsedThisWeek(usage ?? undefined);
+
+    if (!profile?.is_pro && effectiveUsed >= FREE_ANALYSIS_LIMIT) {
       return c.json(
         {
           success: false,
@@ -426,16 +440,22 @@ analyzeDataRoute.post('/', async (c) => {
     }
 
     // ========================================================================
-    // STEP 8: Update usage counter
+    // STEP 8: Update usage counter (upsert so missing row is created; weekly reset via effectiveUsed)
     // ========================================================================
     if (!profile?.is_pro) {
+      const newUsed = effectiveUsed + 1;
+      const lastAnalysisAt = new Date().toISOString();
       await supabaseAdmin
         .from('usage_counters')
-        .update({
-          free_analyses_used: (usage?.free_analyses_used || 0) + 1,
-          last_analysis_at: new Date().toISOString(),
-        })
-        .eq('user_id', userId);
+        .upsert(
+          {
+            user_id: userId,
+            free_analyses_used: newUsed,
+            last_analysis_at: lastAnalysisAt,
+          },
+          { onConflict: 'user_id' }
+        )
+        .select('user_id');
     }
 
     console.log(`[Analysis] Complete for ${symbol}:`, {
