@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { Slot, useRouter, useSegments } from 'expo-router';
-import { View, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, ActivityIndicator, StyleSheet, Platform } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useAuthStore } from '../store/authStore';
@@ -41,6 +41,17 @@ function AuthGate({ children }: { children: React.ReactNode }) {
       return;
     }
 
+    // On web, /privacy and /terms are static HTML served by nginx—no auth. If the SPA was
+    // loaded for this path (e.g. nginx served index.html), force a full page load so nginx
+    // serves the static file and non-users can see the page.
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const pathname = window.location.pathname;
+      if (pathname === '/privacy' || pathname === '/terms') {
+        window.location.href = pathname;
+        return;
+      }
+    }
+
     // Track if we've ever had non-empty segments (so we don't redirect on mid-navigation empty segments)
     if (segments && segments.length > 0) {
       hasSeenNonEmptySegments.current = true;
@@ -72,7 +83,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     
     // Check if user has any auth (session OR user object for unverified users)
     const hasAuth = session || user;
-    
+
     if (!hasAuth && !inAuthGroup) {
       // User is not signed in and trying to access protected route
       // Redirect to welcome/onboarding

@@ -1,10 +1,18 @@
-import { View, Text, StyleSheet, SafeAreaView, Image, Platform, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, Image, Platform, ScrollView, Linking } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Button } from '../../components';
 import { colors, typography, spacing } from '../../theme';
 
 export default function HomeScreen() {
   const router = useRouter();
+
+  const openPrivacy = () => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.location.href = '/privacy';
+    } else {
+      Linking.openURL('https://chartsignl.com/privacy');
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -69,10 +77,7 @@ export default function HomeScreen() {
                 </Text>
                 <Text style={styles.privacyText}>
                   By continuing, you agree to our{' '}
-                  <Text
-                    style={styles.privacyLink}
-                    onPress={() => router.push('/(settings)/privacy')}
-                  >
+                  <Text style={styles.privacyLink} onPress={openPrivacy}>
                     Privacy Policy
                   </Text>
                 </Text>
@@ -138,10 +143,7 @@ export default function HomeScreen() {
                 </Text>
                 <Text style={styles.privacyText}>
                   By continuing, you agree to our{' '}
-                  <Text
-                    style={styles.privacyLink}
-                    onPress={() => router.push('/(settings)/privacy')}
-                  >
+                  <Text style={styles.privacyLink} onPress={openPrivacy}>
                     Privacy Policy
                   </Text>
                 </Text>

@@ -3,6 +3,8 @@ package com.chartsignl.app
 import android.os.Build
 import android.os.Bundle
 
+import com.optionsplungellc.chartsignl.BuildConfig
+import com.optionsplungellc.chartsignl.R
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate
 import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.fabricEnabled

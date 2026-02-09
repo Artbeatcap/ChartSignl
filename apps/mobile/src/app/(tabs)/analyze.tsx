@@ -10,6 +10,7 @@ import {
   Alert,
   Platform,
   Image,
+  Linking,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -507,7 +508,16 @@ export default function AnalyzeScreen() {
 
         {/* Privacy Footer */}
         <View style={styles.footer}>
-          <TouchableOpacity onPress={() => router.push('/(settings)/privacy')} activeOpacity={0.7}>
+          <TouchableOpacity
+            onPress={() => {
+              if (Platform.OS === 'web' && typeof window !== 'undefined') {
+                window.location.href = '/privacy';
+              } else {
+                Linking.openURL('https://chartsignl.com/privacy');
+              }
+            }}
+            activeOpacity={0.7}
+          >
             <Text style={styles.footerText}>
               Privacy Policy
             </Text>

@@ -10,6 +10,7 @@ import {
   Alert, 
   Platform,
   KeyboardAvoidingView,
+  Linking,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
@@ -641,7 +642,16 @@ export default function AccountScreen() {
           Terms of Service
         </Text>{' '}
         and{' '}
-        <Text style={styles.termsLink} onPress={() => router.push('/(settings)/privacy')}>
+        <Text
+          style={styles.termsLink}
+          onPress={() => {
+            if (Platform.OS === 'web' && typeof window !== 'undefined') {
+              window.location.href = '/privacy';
+            } else {
+              Linking.openURL('https://chartsignl.com/privacy');
+            }
+          }}
+        >
           Privacy Policy
         </Text>
       </Text>

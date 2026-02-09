@@ -164,8 +164,11 @@ export default function ProfileScreen() {
   };
 
   const handlePrivacy = () => {
-    // Privacy policy is always accessible
-    router.push('/(settings)/privacy');
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.location.href = '/privacy';
+    } else {
+      Linking.openURL('https://chartsignl.com/privacy');
+    }
   };
 
   const handleTerms = () => {

@@ -395,7 +395,11 @@ export default function PremiumScreen() {
   };
 
   const handlePrivacyPress = () => {
-    router.push('/(settings)/privacy');
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.location.href = '/privacy';
+    } else {
+      Linking.openURL('https://chartsignl.com/privacy');
+    }
   };
 
   const renderComparisonRow = (item: ComparisonItem, index: number) => {

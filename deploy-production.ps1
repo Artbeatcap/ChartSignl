@@ -218,9 +218,10 @@ else
 fi
 "@
 
-# Write script to temp file and execute via SSH
+# Write script to temp file (UTF8NoBOM so server bash doesn't see BOM as "set" command)
 $tempScript = [System.IO.Path]::GetTempFileName()
-$sshScript | Out-File -FilePath $tempScript -Encoding utf8 -NoNewline
+$utf8NoBom = New-Object System.Text.UTF8Encoding $false
+[System.IO.File]::WriteAllText($tempScript, $sshScript, $utf8NoBom)
 
 try {
     if ($USE_WSL) {
