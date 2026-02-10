@@ -30,8 +30,9 @@ WebBrowser.maybeCompleteAuthSession();
 type AuthStep = 'email' | 'password';
 type AccountStatus = 'unknown' | 'exists' | 'new';
 
-// Feature flag: Set to true when OAuth providers are approved
-const ENABLE_SOCIAL_AUTH = false;
+// Feature flags for OAuth
+const ENABLE_SOCIAL_AUTH = true;
+const ENABLE_APPLE_AUTH = false; // Set true when Apple sign-in is configured
 
 export default function AccountScreen() {
   const router = useRouter();
@@ -420,15 +421,16 @@ export default function AccountScreen() {
               <GoogleLogo size={18} />
               <Text style={styles.socialButtonText}>Google</Text>
             </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.socialButton}
-              onPress={() => handleSocialAuth('apple')}
-              disabled={isLoading}
-            >
-              <AppleLogo size={18} />
-              <Text style={styles.socialButtonText}>Apple</Text>
-            </TouchableOpacity>
+            {ENABLE_APPLE_AUTH && (
+              <TouchableOpacity
+                style={styles.socialButton}
+                onPress={() => handleSocialAuth('apple')}
+                disabled={isLoading}
+              >
+                <AppleLogo size={18} />
+                <Text style={styles.socialButtonText}>Apple</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </>
       )}
@@ -520,15 +522,16 @@ export default function AccountScreen() {
               <GoogleLogo size={18} />
               <Text style={styles.socialButtonText}>Google</Text>
             </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.socialButton}
-              onPress={() => handleSocialAuth('apple')}
-              disabled={isLoading}
-            >
-              <AppleLogo size={18} />
-              <Text style={styles.socialButtonText}>Apple</Text>
-            </TouchableOpacity>
+            {ENABLE_APPLE_AUTH && (
+              <TouchableOpacity
+                style={styles.socialButton}
+                onPress={() => handleSocialAuth('apple')}
+                disabled={isLoading}
+              >
+                <AppleLogo size={18} />
+                <Text style={styles.socialButtonText}>Apple</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </>
       )}
@@ -622,15 +625,16 @@ export default function AccountScreen() {
               <GoogleLogo size={18} />
               <Text style={styles.socialButtonText}>Google</Text>
             </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.socialButton}
-              onPress={() => handleSocialAuth('apple')}
-              disabled={isLoading}
-            >
-              <AppleLogo size={18} />
-              <Text style={styles.socialButtonText}>Apple</Text>
-            </TouchableOpacity>
+            {ENABLE_APPLE_AUTH && (
+              <TouchableOpacity
+                style={styles.socialButton}
+                onPress={() => handleSocialAuth('apple')}
+                disabled={isLoading}
+              >
+                <AppleLogo size={18} />
+                <Text style={styles.socialButtonText}>Apple</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </>
       )}

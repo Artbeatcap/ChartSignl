@@ -33,46 +33,106 @@ export default function AuthCallbackScreen() {
   useEffect(() => {
     let subscription: ReturnType<typeof Linking.addEventListener> | null = null;
     
-    const handleCallback = async () => {
+    const parseTokensFromUrl = (url: string): { accessToken: string | null; refreshToken: string | null; type: string | null } => {
+        const hashStart = url.indexOf('#');
+        const queryStart = url.indexOf('?');
+        const hashPart = hashStart >= 0 ? url.slice(hashStart + 1) : '';
+        const queryPart = queryStart >= 0 && (hashStart < 0 || queryStart < hashStart) ? url.slice(queryStart + 1).split('#')[0] : '';
+        let accessToken: string | null = null;
+        let refreshToken: string | null = null;
+        let type: string | null = null;
+        if (hashPart) {
+          const p = new URLSearchParams(hashPart);
+          accessToken = p.get('access_token');
+          refreshToken = p.get('refresh_token');
+          type = p.get('type');
+        }
+        if (!accessToken && queryPart) {
+          const p = new URLSearchParams(queryPart);
+          accessToken = p.get('access_token');
+          refreshToken = p.get('refresh_token');
+          if (!type) type = p.get('type');
+        }
+        return { accessToken, refreshToken, type };
+      };
+
+    const handleCallback = async (deepLinkUrl?: string) => {
       try {
-        // Detect callback type from URL
+        // Detect callback type and get tokens (detectSessionInUrl is false, so we set session ourselves)
         let callbackType: 'oauth' | 'email_verification' | 'recovery' | 'unknown' = 'unknown';
-        let hashParams: URLSearchParams | null = null;
-        
-        // On web, check the URL hash for tokens
+        let accessToken: string | null = null;
+        let refreshToken: string | null = null;
+
+        // Prefer URL from deep link event (mobile) or current page (web)
         if (Platform.OS === 'web' && typeof window !== 'undefined') {
           const hash = window.location.hash.substring(1);
           if (hash) {
-            hashParams = new URLSearchParams(hash);
-            const type = hashParams.get('type');
-            
+            const p = new URLSearchParams(hash);
+            accessToken = p.get('access_token');
+            refreshToken = p.get('refresh_token');
+            const type = p.get('type');
             if (type === 'signup' || type === 'email_change') {
               callbackType = 'email_verification';
               setMessage('Verifying your email...');
             } else if (type === 'recovery') {
               callbackType = 'recovery';
               setMessage('Processing password reset...');
-            } else if (hashParams.get('access_token')) {
+            } else if (accessToken) {
               callbackType = 'oauth';
               setMessage('Completing sign in...');
             }
           }
-        }
-        
-        // Also check query params
-        const type = params.type as string;
-        if (type === 'signup' || type === 'email_change') {
-          callbackType = 'email_verification';
-          setMessage('Verifying your email...');
-        } else if (type === 'recovery') {
-          callbackType = 'recovery';
-          setMessage('Processing password reset...');
+        } else if (deepLinkUrl) {
+          const parsed = parseTokensFromUrl(deepLinkUrl);
+          accessToken = parsed.accessToken;
+          refreshToken = parsed.refreshToken;
+          const type = parsed.type;
+          if (type === 'recovery') callbackType = 'recovery';
+          else if (type === 'signup' || type === 'email_change') callbackType = 'email_verification';
+          else if (accessToken) callbackType = 'oauth';
+          if (callbackType === 'oauth') setMessage('Completing sign in...');
+        } else {
+          const url = await Linking.getInitialURL();
+          if (url) {
+            const parsed = parseTokensFromUrl(url);
+            accessToken = parsed.accessToken;
+            refreshToken = parsed.refreshToken;
+            const type = parsed.type;
+            if (type === 'recovery') callbackType = 'recovery';
+            else if (type === 'signup' || type === 'email_change') callbackType = 'email_verification';
+            else if (accessToken) callbackType = 'oauth';
+            if (callbackType === 'oauth') setMessage('Completing sign in...');
+          }
         }
 
-        // Wait for Supabase to process the URL tokens
-        await new Promise(resolve => setTimeout(resolve, 500));
+        // Fallback: route params (Expo may pass tokens)
+        if (!accessToken && params) {
+          accessToken = (params.access_token as string) ?? null;
+          refreshToken = (params.refresh_token as string) ?? null;
+          const type = params.type as string;
+          if (type === 'recovery') callbackType = 'recovery';
+          else if (type === 'signup' || type === 'email_change') callbackType = 'email_verification';
+          else if (accessToken) callbackType = 'oauth';
+        }
 
-        // Get the session that Supabase should have established from the URL tokens
+        if (callbackType === 'oauth') setMessage('Completing sign in...');
+
+        // Set session from URL tokens (required when detectSessionInUrl is false)
+        if (accessToken) {
+          const { error: sessionError } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken || '',
+          });
+          if (sessionError) {
+            console.error('Callback setSession error:', sessionError);
+            throw sessionError;
+          }
+        }
+
+        // Brief wait for storage to persist
+        await new Promise(resolve => setTimeout(resolve, 300));
+
+        // Get the session (now set from URL tokens)
         const { data: { session }, error } = await supabase.auth.getSession();
         
         if (error) {
@@ -84,8 +144,8 @@ export default function AuthCallbackScreen() {
           // Update auth store with the session
           setSession(session);
           
-          // Wait for state to propagate
-          await new Promise(resolve => setTimeout(resolve, 100));
+          // Wait for state to propagate (and for storage to persist, especially for OAuth/recovery)
+          await new Promise(resolve => setTimeout(resolve, 300));
           
           // Handle based on callback type
           if (callbackType === 'email_verification') {
@@ -102,7 +162,8 @@ export default function AuthCallbackScreen() {
               return;
             }
           } else if (callbackType === 'recovery') {
-            // For password recovery, redirect to reset password screen
+            // For password recovery, give storage time to persist (helps Google/OAuth users)
+            await new Promise(resolve => setTimeout(resolve, 200));
             router.replace('/auth/reset-password');
             return;
           }
@@ -148,29 +209,18 @@ export default function AuthCallbackScreen() {
       }
     };
 
-    // Handle deep link on mobile
+    // Handle deep link on mobile (browser redirects back with tokens in URL)
     const handleDeepLink = async (event: { url: string }) => {
-      const url = event.url;
-      console.log('Deep link received:', url);
-      
-      // The URL might contain tokens in the hash or query params
-      // Supabase should automatically handle them
-      await handleCallback();
+      console.log('Deep link received:', event.url);
+      await handleCallback(event.url);
     };
 
     // Set up deep link listener for mobile
     if (Platform.OS !== 'web') {
       subscription = Linking.addEventListener('url', handleDeepLink);
-      
-      // Also check if app was opened with a deep link
-      Linking.getInitialURL().then((url) => {
-        if (url) {
-          console.log('Initial URL:', url);
-        }
-      });
     }
 
-    // Process the callback
+    // Process the callback (on web uses window.location; on mobile uses getInitialURL() or deep link event)
     handleCallback();
 
     return () => {

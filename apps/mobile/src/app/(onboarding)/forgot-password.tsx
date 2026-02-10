@@ -68,6 +68,9 @@ export default function ForgotPasswordScreen() {
             errorLower.includes('recovery email')) {
           errorTitle = 'Email Configuration Required';
           errorMessage = `Supabase email service is not configured.\n\nTo fix:\n1. Go to Supabase Dashboard > Authentication > URL Configuration\n2. Add redirect URL: ${redirectTo}\n3. Go to Authentication > Settings > Email Auth\n4. Configure SMTP settings OR add your email to authorized recipients (for development)\n\nSee: https://supabase.com/docs/guides/auth/auth-smtp`;
+        } else if (errorLower.includes('user not found') || errorLower.includes('email not found')) {
+          errorTitle = 'Google sign-in user';
+          errorMessage = 'This account uses Google sign-in. To set a password: sign in with Google, then go to Profile → Change password to add a password so you can sign in with email too.';
         } else {
           // For other errors, show the original message
           errorMessage = err.message;
@@ -110,6 +113,12 @@ export default function ForgotPasswordScreen() {
               Click the link in the email to reset your password. The link will expire in 1 hour.
             </Text>
 
+            <View style={styles.helpBox}>
+              <Text style={styles.helpText}>
+                Signed up with Google? We sent the link to this email so you can set a password. Check your inbox and spam folder.
+              </Text>
+            </View>
+
             {/* Actions */}
             <Button
               title="Back to Sign In"
@@ -151,6 +160,11 @@ export default function ForgotPasswordScreen() {
           <Text style={styles.description}>
             Enter your email address and we'll send you a link to reset your password.
           </Text>
+          <View style={styles.helpBox}>
+            <Text style={styles.helpText}>
+              Signed up with Google? You can set a password for this email so you can sign in with email too.
+            </Text>
+          </View>
 
           {/* Form */}
           <View style={styles.form}>

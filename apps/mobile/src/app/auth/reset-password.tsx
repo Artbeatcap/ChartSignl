@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, ScrollView, Alert, Platform } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Button, Input } from '../../components';
@@ -13,14 +13,34 @@ export default function ResetPasswordScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [isValidating, setIsValidating] = useState(true);
   const [isValid, setIsValid] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // Restore success from URL so confirmation survives remount/redirect (important for Google users after updateUser)
+  const urlSuccess =
+    (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.hash?.includes('password-reset-success')) ||
+    params?.success === '1' ||
+    params?.success === true;
+  const [resetSuccess, setResetSuccess] = useState(() => !!urlSuccess);
+  const validationStartedRef = useRef(false);
+
+  const withTimeout = <T,>(promise: Promise<T>, ms: number, label: string): Promise<T> => {
+    return Promise.race([
+      promise,
+      new Promise<T>((_, reject) =>
+        setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)
+      ),
+    ]);
+  };
 
   useEffect(() => {
+    // Run validation only once on mount to avoid repeated effect runs leaving UI stuck on "Validating..."
+    if (validationStartedRef.current) return;
+    validationStartedRef.current = true;
     validateResetToken();
-  }, [params]);
+  }, []);
 
   const validateResetToken = async () => {
     setIsValidating(true);
-    
+
     try {
       // Try to extract tokens from params
       let accessToken: string | null = null;
@@ -51,12 +71,28 @@ export default function ResetPasswordScreen() {
         }
       }
 
+      // On web, tokens are often in the URL hash (Supabase redirect); useLocalSearchParams doesn't include hash
+      if (!accessToken && Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.hash) {
+        try {
+          const hashParams = new URLSearchParams(window.location.hash.substring(1));
+          accessToken = hashParams.get('access_token');
+          refreshToken = hashParams.get('refresh_token');
+          tokenType = hashParams.get('type');
+        } catch (e) {
+          // Ignore hash parse errors
+        }
+      }
+
       // If we have tokens, set the session first
       if (accessToken) {
-        const { error: sessionError, data: sessionData } = await supabase.auth.setSession({
-          access_token: accessToken,
-          refresh_token: refreshToken || '',
-        });
+        const { error: sessionError, data: sessionData } = await withTimeout(
+          supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken || '',
+          }),
+          10000,
+          'setSession'
+        );
 
         if (sessionError) {
           throw sessionError;
@@ -70,13 +106,17 @@ export default function ResetPasswordScreen() {
       }
 
       // Fallback: try getSession (in case Supabase auto-processed the URL)
-      const { data: { session }, error } = await supabase.auth.getSession();
+      const { data: { session }, error } = await withTimeout(
+        supabase.auth.getSession(),
+        10000,
+        'getSession'
+      );
 
       if (error || !session) {
         setIsValid(false);
         Alert.alert(
           'Invalid Link',
-          'This password reset link is invalid or has expired. Please request a new one.',
+          'This password reset link is invalid or has expired. Please request a new one.\n\nSigned up with Google? Use "Sign in with Google" on the sign-in page instead.',
           [{ text: 'OK', onPress: () => router.replace('/(onboarding)/forgot-password') }]
         );
       } else {
@@ -87,7 +127,7 @@ export default function ResetPasswordScreen() {
       setIsValid(false);
       Alert.alert(
         'Invalid Link',
-        'This password reset link is invalid or has expired. Please request a new one.',
+        'This password reset link is invalid or has expired. Please request a new one.\n\nSigned up with Google? Use "Sign in with Google" on the sign-in page instead.',
         [{ text: 'OK', onPress: () => router.replace('/(onboarding)/forgot-password') }]
       );
     } finally {
@@ -96,19 +136,22 @@ export default function ResetPasswordScreen() {
   };
 
   const handleResetPassword = async () => {
+    // Clear previous error
+    setErrorMessage(null);
+
     // Validation
     if (!password.trim() || !confirmPassword.trim()) {
-      Alert.alert('Error', 'Please enter and confirm your new password');
+      setErrorMessage('Please enter and confirm your new password');
       return;
     }
 
     if (password.length < 8) {
-      Alert.alert('Error', 'Password must be at least 8 characters long');
+      setErrorMessage('Password must be at least 8 characters long');
       return;
     }
 
     if (password !== confirmPassword) {
-      Alert.alert('Error', 'Passwords do not match');
+      setErrorMessage('Passwords do not match');
       return;
     }
 
@@ -121,23 +164,24 @@ export default function ResetPasswordScreen() {
 
       if (error) throw error;
 
-      // Show success alert, then navigate to sign-in when user dismisses
+      // Show on-screen success: set URL first so confirmation survives remount (e.g. Google users + auth state update)
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        window.location.hash = 'password-reset-success';
+        const url = new URL(window.location.href);
+        url.searchParams.set('success', '1');
+        window.history.replaceState(null, '', url.pathname + url.search + url.hash);
+      }
+      setResetSuccess(true);
       Alert.alert(
-        'Password Reset Successful! ✓',
-        'Your password has been changed successfully. You can now sign in with your new password.',
-        [
-          {
-            text: 'Sign In',
-            onPress: () => router.replace('/(onboarding)/account'),
-          },
-        ]
+        'Password changed',
+        'Your password has been updated. You can now sign in with your new password.',
+        [{ text: 'OK' }]
       );
     } catch (err) {
       console.error('Password reset error:', err);
-      Alert.alert(
-        'Error',
-        err instanceof Error ? err.message : 'Failed to reset password. Please try again.'
-      );
+      const errMsg = err instanceof Error ? err.message : 'Failed to reset password. Please try again.';
+      setErrorMessage(errMsg);
+      Alert.alert('Error', errMsg);
     } finally {
       setIsLoading(false);
     }
@@ -155,6 +199,33 @@ export default function ResetPasswordScreen() {
 
   if (!isValid) {
     return null; // Alert will handle navigation
+  }
+
+  if (resetSuccess || urlSuccess) {
+    return (
+      <SafeAreaView style={[styles.container, Platform.OS === 'web' && styles.containerWeb]}>
+        <View style={styles.successBanner}>
+          <Text style={styles.successBannerText}>✓ Password changed successfully</Text>
+        </View>
+        <View style={styles.successContainer}>
+          <View style={styles.successIcon}>
+            <Text style={styles.successIconText}>✓</Text>
+          </View>
+          <Text style={styles.successTitle}>Password reset successful</Text>
+          <View style={styles.successMessageBox}>
+            <Text style={styles.successMessage}>
+              Your password has been changed. You can now sign in with your new password.
+            </Text>
+          </View>
+          <Button
+            title="Go to Sign In"
+            onPress={() => router.replace('/(onboarding)/account')}
+            size="lg"
+            style={styles.successButton}
+          />
+        </View>
+      </SafeAreaView>
+    );
   }
 
   return (
@@ -177,6 +248,11 @@ export default function ResetPasswordScreen() {
 
           {/* Form */}
           <View style={styles.form}>
+            {errorMessage && (
+              <View style={styles.errorBanner}>
+                <Text style={styles.errorText}>{errorMessage}</Text>
+              </View>
+            )}
             <Input
               label="New Password"
               placeholder="Enter new password"
@@ -243,6 +319,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+  containerWeb: {
+    minHeight: '100vh' as unknown as number,
+  },
   scrollView: {
     flex: 1,
   },
@@ -260,6 +339,65 @@ const styles = StyleSheet.create({
   loadingText: {
     ...typography.bodyLg,
     color: colors.neutral[600],
+    textAlign: 'center',
+    marginTop: spacing.sm,
+    paddingHorizontal: spacing.lg,
+  },
+  successBanner: {
+    width: '100%',
+    backgroundColor: colors.green?.[600] ?? colors.primary[600],
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  successBannerText: {
+    ...typography.labelLg,
+    color: '#fff',
+    fontWeight: '600',
+  },
+  successContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: spacing.xl,
+  },
+  successIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: colors.green?.[100] ?? colors.primary[100],
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: spacing.lg,
+  },
+  successIconText: {
+    fontSize: 40,
+    color: colors.green?.[600] ?? colors.primary[600],
+    fontWeight: 'bold',
+  },
+  successTitle: {
+    ...typography.displayMd,
+    color: colors.neutral[900],
+    textAlign: 'center',
+    marginBottom: spacing.md,
+  },
+  successMessageBox: {
+    backgroundColor: colors.green?.[50] ?? colors.primary[50],
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderRadius: borderRadius.md,
+    marginBottom: spacing.xl,
+    maxWidth: 360,
+  },
+  successMessage: {
+    ...typography.bodyMd,
+    color: colors.neutral[700],
+    textAlign: 'center',
+  },
+  successButton: {
+    marginTop: spacing.md,
+    minWidth: 200,
   },
   content: {
     flex: 1,
@@ -295,6 +433,20 @@ const styles = StyleSheet.create({
   },
   form: {
     marginTop: spacing.xl,
+  },
+  errorBanner: {
+    backgroundColor: colors.red?.[50] ?? '#FEE',
+    borderWidth: 1,
+    borderColor: colors.red?.[200] ?? '#FCC',
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  errorText: {
+    ...typography.bodySm,
+    color: colors.red?.[700] ?? '#C00',
+    textAlign: 'center',
   },
   requirementsBox: {
     marginTop: spacing.lg,
