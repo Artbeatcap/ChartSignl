@@ -229,9 +229,8 @@ subscriptionRoute.post('/create-checkout', async (c) => {
         .eq('user_id', userId)
         .single();
 
-      let saveResult;
       if (existing) {
-        saveResult = await supabaseAdmin
+        await supabaseAdmin
           .from('subscriptions')
           .update({
             stripe_customer_id: customerId,
@@ -241,7 +240,7 @@ subscriptionRoute.post('/create-checkout', async (c) => {
           })
           .eq('user_id', userId);
       } else {
-        saveResult = await supabaseAdmin
+        await supabaseAdmin
           .from('subscriptions')
           .insert({
             user_id: userId,

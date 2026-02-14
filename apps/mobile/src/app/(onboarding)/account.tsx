@@ -318,10 +318,14 @@ export default function AccountScreen() {
     setError(null);
 
     try {
-      const redirectUrl = AuthSession.makeRedirectUri({
-        scheme: 'chartsignl',
-        path: 'auth/callback',
-      });
+      // On web, use explicit origin + path so Supabase redirects to /auth/callback (not root)
+      const redirectUrl =
+        Platform.OS === 'web' && typeof window !== 'undefined'
+          ? `${window.location.origin}/auth/callback`
+          : AuthSession.makeRedirectUri({
+              scheme: 'chartsignl',
+              path: 'auth/callback',
+            });
 
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider,

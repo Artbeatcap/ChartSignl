@@ -249,13 +249,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   checkSubscriptionStatus: async () => {
     const user = get().user;
+    const session = get().session;
     if (!user) {
       set({ isPremium: false });
       return false;
     }
 
     try {
-      const status = await subscriptionService.getSubscriptionStatus(user.id);
+      const token = session?.access_token ?? undefined;
+      const status = await subscriptionService.getSubscriptionStatus(user.id, token);
       set({ isPremium: status.isActive });
       return status.isActive;
     } catch (error) {
@@ -267,16 +269,19 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   refreshSubscription: async (): Promise<boolean> => {
     const user = get().user;
+    const session = get().session;
     if (!user) return false;
 
     try {
-      const status = await subscriptionService.getSubscriptionStatus(user.id);
+      const token = session?.access_token ?? undefined;
+      const status = await subscriptionService.getSubscriptionStatus(user.id, token);
       set({ isPremium: status.isActive });
       return status.isActive;
     } catch (error) {
       console.error('Error refreshing subscription:', error);
       try {
-        const status = await subscriptionService.getSubscriptionStatus(user.id);
+        const token = session?.access_token ?? undefined;
+        const status = await subscriptionService.getSubscriptionStatus(user.id, token);
         set({ isPremium: status.isActive });
         return status.isActive;
       } catch (checkError) {

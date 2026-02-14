@@ -106,9 +106,9 @@ export interface SubscriptionStatusResponse {
   platform?: 'web' | 'ios' | 'android';
 }
 
-export async function getSubscriptionStatus(): Promise<SubscriptionStatusResponse> {
+export async function getSubscriptionStatus(accessToken?: string | null): Promise<SubscriptionStatusResponse> {
   try {
-    const result = await apiFetch('/api/subscription/status');
+    const result = await apiFetch('/api/subscription/status', {}, accessToken);
     return result;
   } catch (error) {
     throw error;

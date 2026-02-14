@@ -157,7 +157,7 @@ export default function AuthCallbackScreen() {
               setMessage('Email verified successfully!');
               
               setTimeout(() => {
-                router.replace('/(tabs)/analyze');
+                router.replace('/(onboarding)/home');
               }, 1500);
               return;
             }
@@ -193,9 +193,9 @@ export default function AuthCallbackScreen() {
           setStatus('success');
           setMessage('Success!');
           
-          // Navigate to main app
+          // Navigate to /home (AuthGate will then send authenticated users to main app)
           setTimeout(() => {
-            router.replace('/(tabs)/analyze');
+            router.replace('/(onboarding)/home');
           }, 1000);
         } else {
           // No session found - might be an invalid or expired link
@@ -229,7 +229,7 @@ export default function AuthCallbackScreen() {
   }, []);
 
   const handleContinue = () => {
-    router.replace('/(tabs)/analyze');
+    router.replace('/(onboarding)/home');
   };
 
   const handleSignIn = () => {

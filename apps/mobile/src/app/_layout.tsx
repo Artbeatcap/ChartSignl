@@ -46,8 +46,14 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     // serves the static file and non-users can see the page.
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       const pathname = window.location.pathname;
+      const hash = window.location.hash || '';
       if (pathname === '/privacy' || pathname === '/terms') {
         window.location.href = pathname;
+        return;
+      }
+      // Supabase/Google may redirect to site root with tokens in hash; redirect to callback so it can process and then to /home
+      if ((pathname === '/' || pathname === '') && hash.includes('access_token=')) {
+        window.location.replace('/auth/callback' + hash);
         return;
       }
     }

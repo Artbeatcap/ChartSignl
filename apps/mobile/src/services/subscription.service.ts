@@ -124,12 +124,13 @@ class SubscriptionService {
    * Get current subscription status
    * On mobile: Checks RevenueCat + Supabase
    * On web: Checks backend API (which queries Supabase)
+   * @param accessToken - Optional Supabase access token (use when available so API auth works even if localStorage key differs)
    */
-  async getSubscriptionStatus(userId: string): Promise<SubscriptionStatus> {
+  async getSubscriptionStatus(userId: string, accessToken?: string | null): Promise<SubscriptionStatus> {
     if (Platform.OS === 'web') {
-      // On web, call backend API
+      // On web, call backend API (pass token so auth works when session is in memory but not yet in localStorage)
       try {
-        const response = await api.getSubscriptionStatus();
+        const response = await api.getSubscriptionStatus(accessToken);
         return {
           tier: response.isActive ? 'pro' : 'free',
           isActive: response.isActive,
