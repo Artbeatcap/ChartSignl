@@ -265,22 +265,24 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
-  refreshSubscription: async () => {
+  refreshSubscription: async (): Promise<boolean> => {
     const user = get().user;
-    if (!user) return;
+    if (!user) return false;
 
     try {
       const status = await subscriptionService.getSubscriptionStatus(user.id);
       set({ isPremium: status.isActive });
+      return status.isActive;
     } catch (error) {
       console.error('Error refreshing subscription:', error);
-      // Fallback: check status again
       try {
         const status = await subscriptionService.getSubscriptionStatus(user.id);
         set({ isPremium: status.isActive });
+        return status.isActive;
       } catch (checkError) {
         console.error('Error checking subscription status:', checkError);
         set({ isPremium: false });
+        return false;
       }
     }
   },

@@ -6,10 +6,17 @@ const subscriptionRoute = new Hono();
 // Initialize Stripe
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
 const stripeWebhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
-const stripePriceId = process.env.STRIPE_PRICE_ID;
+// Use test price when using test key (avoids "live object with test key" error)
+const isTestKey = stripeSecretKey?.startsWith('sk_test_');
+const stripePriceId = (isTestKey && process.env.STRIPE_PRICE_ID_TEST)
+  ? process.env.STRIPE_PRICE_ID_TEST
+  : process.env.STRIPE_PRICE_ID;
 
 if (!stripeSecretKey) {
   console.warn('⚠️  STRIPE_SECRET_KEY not set. Stripe features will not work.');
+}
+if (stripeSecretKey && isTestKey && !stripePriceId) {
+  console.warn('⚠️  Using test Stripe key but STRIPE_PRICE_ID_TEST is not set. Set it to a price ID from Stripe Dashboard (Test mode) or checkout will fail.');
 }
 
 const stripe = stripeSecretKey ? new Stripe(stripeSecretKey, {
@@ -69,24 +76,73 @@ subscriptionRoute.get('/status', async (c) => {
       });
     }
 
+    // If DB says not active but we have a Stripe customer, sync from Stripe (fixes missed webhooks)
+    let resolvedSubscription = subscription;
+    if (
+      stripe &&
+      subscription.stripe_customer_id &&
+      subscription.status !== 'active'
+    ) {
+      try {
+        const stripeSubs = await stripe.subscriptions.list({
+          customer: subscription.stripe_customer_id,
+          status: 'active',
+          limit: 1,
+        });
+        if (stripeSubs.data.length > 0) {
+          const sub = stripeSubs.data[0];
+          const customerId = typeof sub.customer === 'string' ? sub.customer : sub.customer.id;
+          await supabaseAdmin
+            .from('subscriptions')
+            .upsert({
+              user_id: userId,
+              stripe_subscription_id: sub.id,
+              stripe_customer_id: customerId,
+              status: 'active',
+              platform: 'web',
+              current_period_start: new Date((sub.current_period_start ?? 0) * 1000).toISOString(),
+              current_period_end: new Date((sub.current_period_end ?? 0) * 1000).toISOString(),
+              updated_at: new Date().toISOString(),
+            }, { onConflict: 'user_id' });
+          await supabaseAdmin
+            .from('profiles')
+            .update({ is_pro: true })
+            .eq('id', userId);
+          resolvedSubscription = {
+            ...subscription,
+            status: 'active',
+            stripe_subscription_id: sub.id,
+            current_period_start: new Date((sub.current_period_start ?? 0) * 1000).toISOString(),
+            current_period_end: new Date((sub.current_period_end ?? 0) * 1000).toISOString(),
+          };
+          console.log(`[SUBSCRIPTION] Synced paid status from Stripe for user ${userId}`);
+        }
+      } catch (syncErr) {
+        console.error('[SUBSCRIPTION] Stripe sync failed (continuing with DB state):', syncErr);
+      }
+    }
+
     // Check if subscription is active
     const now = new Date();
-    const periodEnd = subscription.current_period_end 
-      ? new Date(subscription.current_period_end) 
-      : subscription.expires_at 
-        ? new Date(subscription.expires_at) 
+    const periodEnd = resolvedSubscription.current_period_end 
+      ? new Date(resolvedSubscription.current_period_end) 
+      : resolvedSubscription.expires_at 
+        ? new Date(resolvedSubscription.expires_at) 
         : null;
     
-    const isActive = subscription.status === 'active' && 
-      (!periodEnd || periodEnd > now);
+    // For test mode Stripe keys, skip the period end check (test subscriptions may have past dates)
+    let isActive = resolvedSubscription.status === 'active';
+    if (!isTestKey || resolvedSubscription.platform !== 'web') {
+      isActive = isActive && (!periodEnd || periodEnd > now);
+    }
 
     return c.json({
       success: true,
       isActive,
-      expiresAt: subscription.current_period_end || subscription.expires_at || undefined,
-      currentPeriodStart: subscription.current_period_start || undefined,
-      currentPeriodEnd: subscription.current_period_end || undefined,
-      platform: subscription.platform,
+      expiresAt: resolvedSubscription.current_period_end || resolvedSubscription.expires_at || undefined,
+      currentPeriodStart: resolvedSubscription.current_period_start || undefined,
+      currentPeriodEnd: resolvedSubscription.current_period_end || undefined,
+      platform: resolvedSubscription.platform,
     });
 
   } catch (error) {
@@ -166,15 +222,34 @@ subscriptionRoute.post('/create-checkout', async (c) => {
       });
       customerId = customer.id;
 
-      // Save customer ID to subscription record
-      await supabaseAdmin
+      // Save customer ID to subscription record (use select-then-update since UNIQUE constraint missing)
+      const { data: existing } = await supabaseAdmin
         .from('subscriptions')
-        .upsert({
-          user_id: userId,
-          stripe_customer_id: customerId,
-          platform: 'web',
-          status: 'free',
-        }, { onConflict: 'user_id' });
+        .select('id')
+        .eq('user_id', userId)
+        .single();
+
+      let saveResult;
+      if (existing) {
+        saveResult = await supabaseAdmin
+          .from('subscriptions')
+          .update({
+            stripe_customer_id: customerId,
+            platform: 'web',
+            status: 'free',
+            updated_at: new Date().toISOString(),
+          })
+          .eq('user_id', userId);
+      } else {
+        saveResult = await supabaseAdmin
+          .from('subscriptions')
+          .insert({
+            user_id: userId,
+            stripe_customer_id: customerId,
+            platform: 'web',
+            status: 'free',
+          });
+      }
     }
 
     // Get the base URL for redirects
@@ -204,35 +279,57 @@ subscriptionRoute.post('/create-checkout', async (c) => {
       },
     });
 
+    const checkoutUrl = session.url;
+    if (!checkoutUrl || typeof checkoutUrl !== 'string') {
+      console.error('[SUBSCRIPTION] Stripe returned no checkout URL for session:', session.id);
+      return c.json({
+        success: false,
+        error: 'Checkout session has no URL',
+      }, 500);
+    }
+
     return c.json({
       success: true,
-      checkoutUrl: session.url,
+      checkoutUrl,
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Create checkout error:', error);
+    const msg = error?.message ?? '';
+    const isTestLiveMismatch =
+      error?.code === 'resource_missing' ||
+      (typeof msg === 'string' && msg.includes('live mode') && msg.includes('test mode'));
+    const errorMessage = isTestLiveMismatch
+      ? 'Stripe test/live mismatch: use a test price ID (from Stripe Dashboard in Test mode) with your test secret key.'
+      : (error instanceof Error ? error.message : 'Internal server error');
     return c.json({
       success: false,
-      error: error instanceof Error ? error.message : 'Internal server error',
+      error: errorMessage,
     }, 500);
   }
 });
 
 // POST /api/subscription/webhook - Handle Stripe webhooks
+// Stripe sends to the URL configured in Dashboard (Developers → Webhooks). That URL must
+// be reachable by Stripe and this server must have STRIPE_WEBHOOK_SECRET set for that endpoint.
+// For local testing: use "stripe listen --forward-to localhost:4000/api/subscription/webhook"
+// and put the CLI's whsec_ in .env; otherwise Stripe will only call your production URL.
 subscriptionRoute.post('/webhook', async (c) => {
   try {
     if (!stripe || !stripeWebhookSecret) {
+      console.error('[WEBHOOK] Rejected: STRIPE_WEBHOOK_SECRET (or Stripe) not configured on this server');
       return c.json({
         success: false,
         error: 'Stripe webhook not configured',
       }, 500);
     }
 
-    // Get raw body for webhook signature verification
+    // Get raw body for webhook signature verification (must be raw, not parsed)
     const body = await c.req.text();
     const signature = c.req.header('stripe-signature');
 
     if (!signature) {
+      console.error('[WEBHOOK] Rejected: missing stripe-signature header');
       return c.json({
         success: false,
         error: 'Missing stripe-signature header',
@@ -244,10 +341,13 @@ subscriptionRoute.post('/webhook', async (c) => {
     try {
       event = stripe.webhooks.constructEvent(body, signature, stripeWebhookSecret);
     } catch (err) {
-      console.error('Webhook signature verification failed:', err);
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('[WEBHOOK] Signature verification failed:', msg);
+      // "No signatures found matching the payload" = wrong secret or body was modified (e.g. wrong endpoint's secret)
       return c.json({
         success: false,
         error: 'Invalid signature',
+        detail: process.env.NODE_ENV === 'development' ? msg : undefined,
       }, 400);
     }
 
@@ -382,6 +482,74 @@ subscriptionRoute.post('/webhook', async (c) => {
 
   } catch (error) {
     console.error('Webhook error:', error);
+    return c.json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Internal server error',
+    }, 500);
+  }
+});
+
+// POST /api/subscription/customer-portal - Create Stripe Customer Portal session
+subscriptionRoute.post('/customer-portal', async (c) => {
+  try {
+    if (!stripe) {
+      return c.json({
+        success: false,
+        error: 'Stripe not configured',
+      }, 500);
+    }
+
+    // Get authenticated user from Authorization header
+    const authHeader = c.req.header('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return c.json({
+        success: false,
+        error: 'Missing or invalid authorization header',
+      }, 401);
+    }
+    
+    const token = authHeader.slice(7);
+    const userId = await getUserFromToken(token);
+    
+    if (!userId) {
+      return c.json({
+        success: false,
+        error: 'Unauthorized',
+      }, 401);
+    }
+
+    // Get user's Stripe customer ID from subscriptions table
+    const { data: subscription, error } = await supabaseAdmin
+      .from('subscriptions')
+      .select('stripe_customer_id')
+      .eq('user_id', userId)
+      .single();
+
+    if (error || !subscription?.stripe_customer_id) {
+      return c.json({
+        success: false,
+        error: 'No subscription found',
+      }, 404);
+    }
+
+    // Get return URL from request or default
+    const origin = c.req.header('Origin') || c.req.header('Referer') || 'http://localhost:8081';
+    const baseUrl = origin.replace(/\/$/, '');
+    const returnUrl = `${baseUrl}/premium`;
+
+    // Create Customer Portal session
+    const session = await stripe.billingPortal.sessions.create({
+      customer: subscription.stripe_customer_id,
+      return_url: returnUrl,
+    });
+
+    return c.json({
+      success: true,
+      url: session.url,
+    });
+
+  } catch (error) {
+    console.error('Customer portal error:', error);
     return c.json({
       success: false,
       error: error instanceof Error ? error.message : 'Internal server error',

@@ -7,6 +7,7 @@
     "packages/*"
   ],
   "scripts": {
+    "gen-deploy-deletion": "node scripts/gen-deploy-deletion.js",
     "dev": "turbo run dev",
     "dev:mobile": "turbo run dev --filter=mobile",
     "dev:backend": "turbo run dev --filter=backend",

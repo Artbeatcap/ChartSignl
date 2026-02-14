@@ -163,15 +163,6 @@ marketDataRoute.get('/:symbol', async (c) => {
       totalBars: data.length,
     };
 
-    // #region agent log
-    try {
-      const firstDate = data.length > 0 ? new Date(data[0].timestamp).toISOString() : 'none';
-      const lastDate = data.length > 0 ? new Date(data[data.length - 1].timestamp).toISOString() : 'none';
-      const visibleFirstDate = visibleStartIndex < data.length ? new Date(data[visibleStartIndex].timestamp).toISOString() : 'none';
-      await fetch('http://127.0.0.1:7243/ingest/40355958-aed9-4b22-9cb1-0b68d3805912',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'run2',hypothesisId:'H2',location:'apps/backend/src/routes/marketData.ts:response',message:'backend_data',data:{interval:chartInterval,totalBars:data.length,visibleStartIndex,emaWarmupBars,firstDate,lastDate,visibleFirstDate,requestedStartMs,fetchStartMs},timestamp:Date.now()})}).catch(()=>{});
-    } catch {}
-    // #endregion
-
     return c.json(responseData);
   } catch (error) {
     console.error('Market data error:', error);

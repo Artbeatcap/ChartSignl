@@ -301,15 +301,21 @@ class SubscriptionService {
    * Purchase a subscription
    * On mobile: Uses RevenueCat purchasePackage
    * On web: Creates Stripe checkout session and returns URL
+   * @param accessToken - Optional Supabase access token (use when available to avoid localStorage auth issues)
    */
-  async purchaseSubscription(packageToPurchase?: any, userId?: string): Promise<{ success: boolean; checkoutUrl?: string }> {
+  async purchaseSubscription(
+    packageToPurchase?: any,
+    userId?: string,
+    accessToken?: string | null
+  ): Promise<{ success: boolean; checkoutUrl?: string }> {
     if (Platform.OS === 'web') {
-      // Create Stripe checkout session
+      // Create Stripe checkout session (pass token so redirect works even if localStorage key differs)
       try {
-        const response = await api.createCheckoutSession();
+        const response = await api.createCheckoutSession(accessToken);
+        const url = response?.checkoutUrl;
         return {
-          success: true,
-          checkoutUrl: response.checkoutUrl,
+          success: !!url,
+          checkoutUrl: url ?? undefined,
         };
       } catch (error) {
         console.error('Error creating Stripe checkout:', error);

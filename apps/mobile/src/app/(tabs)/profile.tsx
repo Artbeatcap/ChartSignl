@@ -65,17 +65,14 @@ export default function ProfileScreen() {
       } else if (Platform.OS === 'android') {
         await Linking.openURL('https://play.google.com/store/account/subscriptions');
       } else {
-        Alert.alert(
-          'Manage Subscription',
-          'Please manage your subscription through the App Store or Google Play Store where you originally subscribed.',
-          [{ text: 'OK' }]
-        );
+        // For web, redirect to premium screen where they can manage Stripe subscription
+        router.push('/premium');
       }
     } catch (error) {
       console.error('Error opening subscription management:', error);
       Alert.alert(
         'Error',
-        'Unable to open subscription management. Please go to your device\'s Settings > Subscriptions to manage your subscription.',
+        'Unable to open subscription management. Please try again.',
         [{ text: 'OK' }]
       );
     }
@@ -313,9 +310,6 @@ export default function ProfileScreen() {
             <Text style={styles.premiumDescription}>
               You have unlimited chart analyses
             </Text>
-            <TouchableOpacity onPress={handleManageSubscription}>
-              <Text style={styles.manageLink}>Manage Subscription</Text>
-            </TouchableOpacity>
           </Card>
         )}
 
@@ -394,6 +388,16 @@ export default function ProfileScreen() {
             onPress={handleRestorePurchases}
           >
             <Text style={styles.restoreText}>Restore Purchases</Text>
+          </TouchableOpacity>
+        )}
+
+        {/* Manage Subscription (premium users only) */}
+        {isPremium && (
+          <TouchableOpacity 
+            style={styles.manageSubscriptionButton} 
+            onPress={handleManageSubscription}
+          >
+            <Text style={styles.manageSubscriptionText}>Manage Subscription</Text>
           </TouchableOpacity>
         )}
 
@@ -674,6 +678,15 @@ const styles = StyleSheet.create({
   restoreText: {
     ...typography.bodySm,
     color: colors.primary[600],
+    textDecorationLine: 'underline',
+  },
+  manageSubscriptionButton: {
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  manageSubscriptionText: {
+    ...typography.bodySm,
+    color: colors.neutral[500],
     textDecorationLine: 'underline',
   },
   signOutButton: {

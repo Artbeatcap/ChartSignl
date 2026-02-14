@@ -28,12 +28,13 @@ function getAccessTokenFromStorage(): string | null {
 }
 
 // Generic fetch wrapper with auth
+// Pass explicit accessToken when available (e.g. from auth store) to avoid localStorage/key issues
 async function apiFetch<T>(
   endpoint: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  accessToken?: string | null
 ): Promise<T> {
-  // Get token directly from storage to avoid Supabase's hanging getSession()
-  const token = getAccessTokenFromStorage();
+  const token = accessToken ?? getAccessTokenFromStorage();
   
   if (!token) {
     throw new Error('Not authenticated');
@@ -118,11 +119,34 @@ export interface CheckoutSessionResponse {
   checkoutUrl: string;
 }
 
-export async function createCheckoutSession(): Promise<CheckoutSessionResponse> {
-  return apiFetch('/api/subscription/create-checkout', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
+export async function createCheckoutSession(accessToken?: string | null): Promise<CheckoutSessionResponse> {
+  return apiFetch(
+    '/api/subscription/create-checkout',
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
     },
-  });
+    accessToken
+  );
+}
+
+export interface CustomerPortalResponse {
+  success: boolean;
+  url?: string;
+  error?: string;
+}
+
+export async function createCustomerPortalSession(accessToken?: string | null): Promise<CustomerPortalResponse> {
+  return apiFetch(
+    '/api/subscription/customer-portal',
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    },
+    accessToken
+  );
 }

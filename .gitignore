@@ -14,6 +14,8 @@ build/
 .env
 .env.local
 .env.*.local
+.env-remote
+remote.env
 
 # IDE
 .idea/
@@ -38,3 +40,4 @@ coverage/
 # Misc
 *.pem
 .vercel
+deploy-deletion.sh

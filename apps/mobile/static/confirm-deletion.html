@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Confirm Deletion - ChartSignl</title>
+    <meta name="description" content="Confirm your ChartSignl account deletion.">
+    <link rel="canonical" href="https://chartsignl.com/confirm-deletion">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #f0fdf4 0%, #f0f9ff 100%);
+            min-height: 100vh;
+        }
+        .container { max-width: 560px; margin: 0 auto; padding: 40px 20px; }
+        header { text-align: center; margin-bottom: 40px; }
+        .logo { font-size: 24px; font-weight: 700; color: #0d9488; text-decoration: none; }
+        h1 { font-size: 28px; color: #111; margin: 20px 0 10px; }
+        .content {
+            background: white;
+            border-radius: 16px;
+            padding: 40px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+        }
+        .intro { font-size: 16px; color: #555; margin-bottom: 24px; }
+        .result { margin: 24px 0; padding: 16px; border-radius: 8px; }
+        .result.success { background: #f0fdf4; border: 1px solid #86efac; color: #166534; }
+        .result.error { background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c; }
+        .result.pending { background: #f0f9ff; border: 1px solid #bae6fd; color: #0c4a6e; }
+        .btn {
+            display: inline-block;
+            padding: 12px 24px;
+            background: #0d9488;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            text-align: center;
+        }
+        .btn:hover { background: #0f766e; }
+        .btn:disabled { opacity: 0.7; cursor: not-allowed; }
+        h2 { font-size: 20px; color: #0d9488; margin: 24px 0 12px; }
+        ul { margin: 0 0 16px 25px; color: #444; }
+        li { margin-bottom: 6px; }
+        footer {
+            text-align: center;
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #e5e7eb;
+        }
+        footer a { color: #0d9488; text-decoration: none; margin: 0 15px; }
+        footer a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <script>
+        window.API_URL = window.API_URL || 'https://api.chartsignl.com';
+    </script>
+    <div class="container">
+        <header>
+            <a href="https://chartsignl.com" class="logo">📊 ChartSignl</a>
+            <h1>Confirm Account Deletion</h1>
+        </header>
+        <div class="content">
+            <div id="pending" class="result pending">
+                Confirm that you want to permanently delete your account and associated data.
+                <p style="margin-top:16px;"><button type="button" class="btn" id="confirm-btn">Confirm deletion</button></p>
+            </div>
+            <div id="success" class="result success" style="display:none;"></div>
+            <div id="error" class="result error" style="display:none;"></div>
+            <h2>What gets deleted</h2>
+            <ul>
+                <li>Your account and profile</li>
+                <li>All chart analyses and history</li>
+                <li>Settings and preferences</li>
+            </ul>
+            <h2>What we retain</h2>
+            <ul>
+                <li>Transaction and payment records (7 years, as required by law)</li>
+                <li>Anonymized or aggregated analytics that cannot identify you</li>
+            </ul>
+        </div>
+        <footer>
+            <a href="https://chartsignl.com">Home</a>
+            <a href="https://chartsignl.com/data-deletion">Request deletion</a>
+            <a href="https://chartsignl.com/privacy">Privacy Policy</a>
+        </footer>
+    </div>
+    <script>
+        (function() {
+            var params = new URLSearchParams(window.location.search);
+            var token = params.get('token');
+            var apiUrl = window.API_URL;
+            var pendingEl = document.getElementById('pending');
+            var successEl = document.getElementById('success');
+            var errorEl = document.getElementById('error');
+            var confirmBtn = document.getElementById('confirm-btn');
+
+            if (!token) {
+                pendingEl.style.display = 'none';
+                errorEl.style.display = 'block';
+                errorEl.textContent = 'Invalid link. Please use the link from your confirmation email, or request a new deletion link from the data deletion page.';
+                return;
+            }
+
+            confirmBtn.addEventListener('click', function() {
+                confirmBtn.disabled = true;
+                fetch(apiUrl + '/api/auth/confirm-deletion', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token: token })
+                })
+                .then(function(res) { return res.json().then(function(data) { return { ok: res.ok, data: data }; }); })
+                .then(function(result) {
+                    pendingEl.style.display = 'none';
+                    if (result.ok && result.data.success) {
+                        successEl.style.display = 'block';
+                        successEl.textContent = result.data.message || 'Your account and associated data have been permanently deleted.';
+                    } else {
+                        errorEl.style.display = 'block';
+                        errorEl.textContent = result.data.error || 'This link is invalid or has expired. Please request a new deletion link.';
+                    }
+                })
+                .catch(function() {
+                    pendingEl.style.display = 'none';
+                    errorEl.style.display = 'block';
+                    errorEl.textContent = 'Unable to complete the request. Please try again.';
+                })
+                .finally(function() { confirmBtn.disabled = false; });
+            });
+        })();
+    </script>
+</body>
+</html>

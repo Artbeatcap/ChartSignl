@@ -128,16 +128,6 @@ export function addIndicatorsAndTrim(data: MarketDataPoint[], visibleStartIndex:
 
   const trimmed = withIndicators.slice(safeIndex);
 
-  // #region agent log
-  try {
-    const firstDate = data.length > 0 ? new Date(data[0].timestamp).toISOString() : 'none';
-    const lastDate = data.length > 0 ? new Date(data[data.length - 1].timestamp).toISOString() : 'none';
-    const trimmedFirstDate = trimmed.length > 0 ? new Date(trimmed[0].timestamp).toISOString() : 'none';
-    const trimmedLastDate = trimmed.length > 0 ? new Date(trimmed[trimmed.length - 1].timestamp).toISOString() : 'none';
-    fetch('http://127.0.0.1:7243/ingest/40355958-aed9-4b22-9cb1-0b68d3805912',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:'debug-session',runId:'run2',hypothesisId:'H2',location:'apps/mobile/src/lib/marketData.ts:addIndicatorsAndTrim',message:'frontend_trim',data:{fullLen:data.length,visibleStartIndex,safeIndex,trimmedLen:trimmed.length,firstDate,lastDate,trimmedFirstDate,trimmedLastDate},timestamp:Date.now()})}).catch(()=>{});
-  } catch {}
-  // #endregion
-
   return trimmed;
 }
 

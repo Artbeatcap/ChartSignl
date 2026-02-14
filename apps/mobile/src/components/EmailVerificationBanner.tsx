@@ -23,11 +23,6 @@ export function EmailVerificationBanner({
   const [showSuccess, setShowSuccess] = useState(false);
   const [showModal, setShowModal] = useState(true);
 
-  // #region agent log
-  const shouldHide = isEmailVerified || !user;
-  fetch('http://127.0.0.1:7243/ingest/40355958-aed9-4b22-9cb1-0b68d3805912',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'EmailVerificationBanner.tsx:render',message:'EmailVerificationBanner render',data:{hasUser:!!user,isEmailVerified,shouldHide},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H1'})}).catch(()=>{});
-  // #endregion
-
   // All hooks must run unconditionally (before any early return) to satisfy Rules of Hooks
   useEffect(() => {
     // Countdown timer for resend cooldown
@@ -47,6 +42,7 @@ export function EmailVerificationBanner({
   }, [checkEmailVerification]);
 
   // Don't show if email is already verified or no user (after all hooks)
+  const shouldHide = !user || isEmailVerified;
   if (shouldHide) {
     return null;
   }

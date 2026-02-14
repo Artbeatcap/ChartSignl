@@ -334,6 +334,11 @@ export default function AccountScreen() {
       if (error) throw error;
 
       if (data?.url) {
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+          // Redirect in same window (no popup)
+          window.location.href = data.url;
+          return;
+        }
         const result = await WebBrowser.openAuthSessionAsync(
           data.url,
           redirectUrl
