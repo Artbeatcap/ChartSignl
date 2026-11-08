@@ -2,9 +2,22 @@
 
 import { Hono } from 'hono';
 import { supabaseAdmin, getUserFromToken } from '../lib/supabase.js';
-import type { GetHistoryResponse, GetAnalysisResponse, AnalysisHistoryItem } from '@chartsignl/core';
+import { findLinkedPredictionId } from '../services/atlasLink.js';
+import type {
+  GetHistoryResponse,
+  GetAnalysisResponse,
+  AnalysisHistoryItem,
+  DataFreshness,
+} from '@chartsignl/core';
 
 const historyRoute = new Hono();
+
+function freshnessFromJson(json: unknown): DataFreshness | undefined {
+  if (!json || typeof json !== 'object') return undefined;
+  const f = (json as { freshness?: DataFreshness }).freshness;
+  if (!f || typeof f.asOf !== 'string') return undefined;
+  return f;
+}
 
 // GET /api/analyses - Get user's analysis history
 historyRoute.get('/', async (c) => {
@@ -36,7 +49,7 @@ historyRoute.get('/', async (c) => {
     // Fetch analyses (no image_url needed)
     const { data: analyses, error, count } = await supabaseAdmin
       .from('chart_analyses')
-      .select('id, created_at, symbol, timeframe, headline', { count: 'exact' })
+      .select('id, created_at, symbol, timeframe, headline, prediction_id, analysis_json', { count: 'exact' })
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
@@ -50,13 +63,31 @@ historyRoute.get('/', async (c) => {
     }
 
     // Transform to response format (no imageUrl)
-    const historyItems: AnalysisHistoryItem[] = (analyses || []).map((a) => ({
-      id: a.id,
-      createdAt: a.created_at,
-      symbol: a.symbol,
-      timeframe: a.timeframe,
-      headline: a.headline || 'Chart analysis',
-    }));
+    const historyItems: AnalysisHistoryItem[] = await Promise.all(
+      (analyses || []).map(async (a) => {
+        const predictionId =
+          a.prediction_id ??
+          (await findLinkedPredictionId(userId, {
+            id: a.id,
+            symbol: a.symbol,
+            timeframe: a.timeframe,
+            created_at: a.created_at,
+            prediction_id: a.prediction_id,
+          }));
+
+        const storedFreshness = freshnessFromJson(a.analysis_json);
+
+        return {
+          id: a.id,
+          createdAt: a.created_at,
+          symbol: a.symbol,
+          timeframe: a.timeframe,
+          headline: a.headline || 'Chart analysis',
+          ...(predictionId ? { predictionId } : {}),
+          ...(storedFreshness ? { freshness: storedFreshness } : {}),
+        };
+      })
+    );
 
     return c.json<GetHistoryResponse>({
       success: true,
@@ -100,7 +131,7 @@ historyRoute.get('/:id', async (c) => {
     // Fetch the analysis (no image_url)
     const { data: analysis, error } = await supabaseAdmin
       .from('chart_analyses')
-      .select('analysis_json, created_at')
+      .select('analysis_json, created_at, symbol, timeframe, prediction_id')
       .eq('id', analysisId)
       .eq('user_id', userId)
       .single();
@@ -112,10 +143,21 @@ historyRoute.get('/:id', async (c) => {
       }, 404);
     }
 
+    const predictionId =
+      analysis.prediction_id ??
+      (await findLinkedPredictionId(userId, {
+        id: analysisId,
+        symbol: analysis.symbol,
+        timeframe: analysis.timeframe,
+        created_at: analysis.created_at,
+        prediction_id: analysis.prediction_id,
+      }));
+
     return c.json<GetAnalysisResponse>({
       success: true,
       analysis: analysis.analysis_json,
       createdAt: analysis.created_at,
+      ...(predictionId ? { predictionId } : {}),
     });
 
   } catch (error) {

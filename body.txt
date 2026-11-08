@@ -1,0 +1,2 @@
+<a href="https://accounts.google.com/o/oauth2/v2/auth?client_id=642070860556-v1hstdva5ve6s1fdrp4otk9gqbj9oqul.apps.googleusercontent.com&amp;redirect_to=chartsignl%3A%2F%2Fauth%2Fcallback&amp;redirect_uri=https%3A%2F%2Fpgxlfjvezvmsynzimxnt.supabase.co%2Fauth%2Fv1%2Fcallback&amp;response_type=code&amp;scope=email+profile&amp;state=8a7eef04-af8f-4762-9dfb-c8599c0f5f99">Found</a>.
+

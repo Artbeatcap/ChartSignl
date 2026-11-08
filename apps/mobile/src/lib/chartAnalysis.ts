@@ -1,13 +1,14 @@
-import type { MarketDataPoint, EnhancedAIAnalysis, AILevel, EnhancedAnalysisResponse } from '@chartsignl/core';
+import type { MarketDataPoint, EnhancedAIAnalysis, AILevel, EnhancedAnalysisResponse, DataFreshness } from '@chartsignl/core';
 import { getAccessToken } from './supabase';
-
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:4000';
+import { API_URL } from './apiConfig';
 
 // Analyze chart data using AI (via our backend)
 export async function analyzeChartData(
   symbol: string,
   interval: string,
-  data: MarketDataPoint[]
+  data: MarketDataPoint[],
+  options?: { direction: string; confidence: number; predictionId?: string } | null,
+  freshness?: DataFreshness,
 ): Promise<EnhancedAIAnalysis> {
   const token = await getAccessToken();
 
@@ -25,6 +26,13 @@ export async function analyzeChartData(
       symbol,
       interval,
       data: data.slice(-100), // Send last 100 data points
+      ...(freshness ? { freshness } : {}),
+      ...(options
+        ? {
+            forecast: { direction: options.direction, confidence: options.confidence },
+            ...(options.predictionId ? { predictionId: options.predictionId } : {}),
+          }
+        : {}),
     }),
   });
 

@@ -14,6 +14,10 @@ build/
 .env
 .env.local
 .env.*.local
+.env-remote
+remote.env
+.env.server
+apps/mobile/secrets/
 
 # IDE
 .idea/
@@ -37,4 +41,21 @@ coverage/
 
 # Misc
 *.pem
+apps/backend/tmp/
+*.p8
+*.jks
+*.p12
+*.pfx
+*.keystore
+*-release.keystore
 .vercel
+deploy-deletion.sh
+TROUBLESHOOTING-PREMIUM-STATUS.md
+
+# Backup env files. Added 2026-11-08 before the server snapshot so a backup cannot be committed.
+.env.*
+.env.bak
+
+# Left out of the 2026-11-08 server snapshot. Contains an embedded token and is 11 MB.
+apps/mobile/dummy.js
+dummy.js

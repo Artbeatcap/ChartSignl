@@ -1,10 +1,74 @@
-import { useEffect } from 'react';
-import { Stack } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
+import React, { Component, useEffect, useRef } from 'react';
+import { Slot, useRouter, useSegments } from 'expo-router';
+import { View, ActivityIndicator, StyleSheet, Platform, Text } from 'react-native';
+import * as SplashScreen from 'expo-splash-screen';
+import { SystemBars } from 'react-native-edge-to-edge';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useAuthStore } from '../store/authStore';
 import { subscriptionService } from '../services/subscription.service';
 import { colors } from '../theme';
+import { usePushNotifications } from '../lib/usePushNotifications';
+import { EducationProvider } from '../components/education';
+
+type ErrorBoundaryState = { hasError: boolean; error: Error | null };
+
+class RootErrorBoundary extends Component<
+  { children: React.ReactNode },
+  ErrorBoundaryState
+> {
+  state: ErrorBoundaryState = { hasError: false, error: null };
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error) {
+    console.error('RootErrorBoundary caught:', error.message, error.stack);
+    // #region agent log
+    try {
+      const msg = error.message || '';
+      fetch('http://127.0.0.1:7243/ingest/40355958-aed9-4b22-9cb1-0b68d3805912', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          location: '_layout.tsx:RootErrorBoundary.componentDidCatch',
+          message: 'RootErrorBoundary caught',
+          data: {
+            errorMessage: msg,
+            hasRNSVG: msg.includes('RNSVG'),
+            hasPath: msg.includes('RNSVGPath'),
+          },
+          timestamp: Date.now(),
+          hypothesisId: msg.includes('RNSVG') ? 'H1' : 'H_other',
+        }),
+      }).catch(() => {});
+    } catch (_) {}
+    // #endregion
+  }
+
+  render() {
+    if (this.state.hasError && this.state.error) {
+      const showStack = typeof __DEV__ !== 'undefined' && __DEV__ && this.state.error.stack;
+      return (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorTitle}>Something went wrong</Text>
+          <Text style={styles.errorMessage}>{this.state.error.message}</Text>
+          {showStack ? (
+            <Text style={styles.errorStack} selectable>
+              {this.state.error.stack}
+            </Text>
+          ) : null}
+          <Text style={styles.errorHint}>Close and reopen the app to try again.</Text>
+        </View>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+// Temporary diagnostic: RevenueCat Android key at load time (check Logcat)
+console.log('RC Android Key:', process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_KEY ? 'SET' : 'MISSING');
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -15,52 +79,200 @@ const queryClient = new QueryClient({
   },
 });
 
-export default function RootLayout() {
-  const initialize = useAuthStore((state) => state.initialize);
+function AuthGate({ children }: { children: React.ReactNode }) {
+  const { isInitialized, isLoading, session, user, initialize } = useAuthStore();
+  const segments = useSegments();
+  const router = useRouter();
+  const hasSeenNonEmptySegments = useRef(false);
+
+  // Native push initialization (silent): runs effects only once auth session is ready.
+  usePushNotifications();
 
   useEffect(() => {
-    // Initialize subscription service (handles RevenueCat on mobile, skips on web)
-    const initSubscription = async () => {
+    const init = async () => {
       try {
         await subscriptionService.initialize();
       } catch (error) {
         console.error('Error initializing subscription service:', error);
       }
+      try {
+        await initialize();
+      } catch (error) {
+        console.error('Error initializing auth:', error);
+      }
     };
-
-    initSubscription();
-    initialize();
+    init();
   }, [initialize]);
 
+  useEffect(() => {
+    if (!isInitialized || isLoading) {
+      return;
+    }
+
+    // On web, /privacy and /terms are static HTML served by nginx—no auth. If the SPA was
+    // loaded for this path (e.g. nginx served index.html), force a full page load so nginx
+    // serves the static file and non-users can see the page.
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const pathname = window.location.pathname;
+      const hash = window.location.hash || '';
+      if (pathname === '/privacy' || pathname === '/terms') {
+        window.location.href = pathname;
+        return;
+      }
+      // Supabase/Google may redirect to site root with tokens in hash; redirect to callback so it can process and then to /home
+      if ((pathname === '/' || pathname === '') && hash.includes('access_token=')) {
+        window.location.replace('/auth/callback' + hash);
+        return;
+      }
+    }
+
+    const webPathname =
+      Platform.OS === 'web' && typeof window !== 'undefined' ? window.location.pathname : '';
+    const isWebGuestAnalyze =
+      Platform.OS === 'web' &&
+      (webPathname === '/analyze' || webPathname.startsWith('/analyze/'));
+
+    // Track if we've ever had non-empty segments (so we don't redirect on mid-navigation empty segments)
+    if (segments && segments.length > 0) {
+      hasSeenNonEmptySegments.current = true;
+    }
+
+    // If segments is empty on web (Expo Router sometimes has empty segments on initial load),
+    // provide a default redirect after a brief delay. Skip redirect when we've already seen
+    // non-empty segments (e.g. user tapped Profile -> Edit Profile and segments went empty briefly).
+    if (!segments || segments.length === 0) {
+      const timeoutId = setTimeout(() => {
+        if (!hasSeenNonEmptySegments.current) {
+          if (isWebGuestAnalyze) {
+            return;
+          }
+          if (!session && !user) {
+            router.replace('/(onboarding)/home');
+          } else {
+            router.replace('/(tabs)/analyze');
+          }
+        }
+      }, 100);
+      
+      return () => clearTimeout(timeoutId);
+    }
+
+    // Define which route groups don't require auth
+    // Include (settings) so privacy/terms pages are accessible without authentication
+    const inAuthGroup = segments[0] === '(onboarding)' || segments[0] === 'auth' || segments[0] === '(settings)';
+    // Guests on the web can use Analyze, and can open History/Profile to a
+    // sign-in prompt. A stale /analyze pathname must not keep them on another
+    // tab — Expo updates segments and the URL at different times.
+    const webGuestTab =
+      Platform.OS === 'web' &&
+      segments[0] === '(tabs)' &&
+      (segments[1] === 'analyze' || segments[1] === 'history' || segments[1] === 'profile');
+    const isGuestAnalyzeRoute = webGuestTab;
+    
+    // Exclude reset-password from redirect - it needs a session (from recovery token) but user should stay on screen
+    const isResetPassword = segments[0] === 'auth' && segments[1] === 'reset-password';
+    
+    // Check if user has any auth (session OR user object for unverified users)
+    const hasAuth = session || user;
+
+    if (!hasAuth && !inAuthGroup && !isGuestAnalyzeRoute) {
+      // User is not signed in and trying to access protected route
+      // Redirect to welcome/onboarding
+      console.log('AuthGate: No auth, redirecting to home');
+      router.replace('/(onboarding)/home');
+    } else if (hasAuth && inAuthGroup && !isResetPassword) {
+      // User is signed in but on an auth/onboarding screen — redirect to main app
+      if (segments[0] === '(onboarding)' || segments[0] === 'auth') {
+        console.log('AuthGate: Has auth, on auth/onboarding, redirecting to analyze');
+        router.replace('/(tabs)/analyze');
+      }
+    }
+  }, [isInitialized, isLoading, session, user, segments, router]);
+
+  // Hide native splash once we're ready to show content (splash stays up during init)
+  useEffect(() => {
+    if (isInitialized && !isLoading) {
+      SplashScreen.hideAsync().catch(() => {});
+    }
+  }, [isInitialized, isLoading]);
+
+  // Show loading screen while initializing
+  if (!isInitialized || isLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={colors.primary[500]} />
+      </View>
+    );
+  }
+
+  return <>{children}</>;
+}
+
+function RootContent() {
+  // Screens apply their own safe area. Padding here as well stacked a second
+  // status-bar and home-indicator gap on top of each screen's SafeAreaView.
   return (
-    <QueryClientProvider client={queryClient}>
-      <StatusBar style="dark" />
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          contentStyle: { backgroundColor: colors.background },
-          animation: 'slide_from_right',
-        }}
-      >
-        <Stack.Screen name="index" />
-        <Stack.Screen name="(onboarding)" options={{ gestureEnabled: false }} />
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen
-          name="premium"
-          options={{
-            presentation: 'modal',
-            animation: 'slide_from_bottom',
-            title: 'Premium',
-          }}
-        />
-        <Stack.Screen
-          name="(settings)"
-          options={{
-            presentation: 'modal',
-            animation: 'slide_from_bottom',
-          }}
-        />
-      </Stack>
-    </QueryClientProvider>
+    <View style={styles.screenWrapper}>
+      <Slot />
+    </View>
   );
 }
+
+export default function RootLayout() {
+  return (
+    <RootErrorBoundary>
+      <SafeAreaProvider>
+        <QueryClientProvider client={queryClient}>
+          <EducationProvider>
+            <SystemBars style="dark" />
+            <AuthGate>
+              <RootContent />
+            </AuthGate>
+          </EducationProvider>
+        </QueryClientProvider>
+      </SafeAreaProvider>
+    </RootErrorBoundary>
+  );
+}
+
+const styles = StyleSheet.create({
+  screenWrapper: {
+    flex: 1,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: colors.background,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: colors.background,
+    padding: 24,
+  },
+  errorTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.neutral[900],
+    marginBottom: 8,
+  },
+  errorMessage: {
+    fontSize: 14,
+    color: colors.neutral[700],
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  errorStack: {
+    fontSize: 11,
+    color: colors.neutral[600],
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    marginBottom: 16,
+    maxHeight: 200,
+  },
+  errorHint: {
+    fontSize: 12,
+    color: colors.neutral[500],
+  },
+});

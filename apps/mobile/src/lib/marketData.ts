@@ -1,40 +1,113 @@
-import type { MarketDataPoint, ChartInterval } from '@chartsignl/core';
+import type { MarketDataPoint, ChartInterval, DataFreshness } from '@chartsignl/core';
+import { MARKET_DATA_DELAY_MINUTES, MARKET_DATA_SOURCE } from '@chartsignl/core';
+import { API_URL } from './apiConfig';
+import { useMarketDataStore } from '../store/marketDataStore';
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:4000';
+export interface MarketDataResponse {
+  symbol: string;
+  interval: string;
+  resultsCount?: number;
+  data: MarketDataPoint[];
+  visibleStartIndex?: number;
+  emaWarmupBars?: number;
+  totalBars?: number;
+  freshness?: DataFreshness;
+}
 
-// Fetch market data from our backend (which proxies to Yahoo Finance)
+export interface FetchMarketDataResult {
+  data: MarketDataPoint[];
+  visibleStartIndex: number;
+  emaWarmupBars: number;
+  freshness?: DataFreshness;
+}
+
+function assertPlausibleAsOf(asOf: string): void {
+  if (typeof __DEV__ === 'undefined' || !__DEV__) return;
+  const y = new Date(asOf).getUTCFullYear();
+  if (y < 2000 || y > 2100) {
+    console.error(`[freshness] implausible asOf ${asOf} — unit mismatch?`);
+  }
+}
+
+function freshnessFromBars(bars: MarketDataPoint[]): DataFreshness | undefined {
+  const last = bars[bars.length - 1];
+  if (!last) return undefined;
+  const ms = last.timestamp > 1e15 ? last.timestamp / 1_000_000 : last.timestamp;
+  if (!ms || !Number.isFinite(ms)) return undefined;
+  const asOf = new Date(ms).toISOString();
+  assertPlausibleAsOf(asOf);
+  const y = new Date(ms).getUTCFullYear();
+  if (y < 2000 || y > 2100) return undefined;
+  return {
+    asOf,
+    delayMinutes: MARKET_DATA_DELAY_MINUTES,
+    isDelayed: MARKET_DATA_DELAY_MINUTES > 0,
+    source: MARKET_DATA_SOURCE,
+  };
+}
+
+function rememberFreshness(freshness: DataFreshness | undefined): void {
+  if (freshness) {
+    assertPlausibleAsOf(freshness.asOf);
+    useMarketDataStore.getState().setLastFreshness(freshness);
+  }
+}
+
+// Fetch market data from our backend (which proxies to Massive.com)
 export async function fetchMarketData(
   symbol: string,
   interval: ChartInterval = '3mo'
-): Promise<MarketDataPoint[]> {
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/77853d40-2630-465b-b1da-310f30bd4208',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'marketData.ts:9',message:'fetchMarketData entry',data:{symbol,interval,apiUrl:API_URL},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-  // #endregion
+): Promise<FetchMarketDataResult> {
   const url = `${API_URL}/api/market-data/${encodeURIComponent(symbol)}?interval=${interval}`;
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/77853d40-2630-465b-b1da-310f30bd4208',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'marketData.ts:12',message:'fetchMarketData before request',data:{url},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-  // #endregion
-  const response = await fetch(url);
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/77853d40-2630-465b-b1da-310f30bd4208',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'marketData.ts:15',message:'fetchMarketData response received',data:{ok:response.ok,status:response.status,statusText:response.statusText},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-  // #endregion
+  
+  let response: Response;
+  try {
+    response = await fetch(url);
+  } catch (fetchError) {
+    throw new Error(`Network error: ${fetchError instanceof Error ? fetchError.message : 'Failed to fetch'}`);
+  }
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: 'Failed to fetch data' }));
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/77853d40-2630-465b-b1da-310f30bd4208',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'marketData.ts:18',message:'fetchMarketData error response',data:{status:response.status,error},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-    // #endregion
+    let error: any;
+    try {
+      error = await response.json();
+    } catch (parseError) {
+      error = { error: `HTTP ${response.status}: ${response.statusText}` };
+    }
     throw new Error(error.error || 'Failed to fetch market data');
   }
 
-  const data = await response.json();
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/77853d40-2630-465b-b1da-310f30bd4208',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'marketData.ts:22',message:'fetchMarketData response parsed',data:{hasData:!!data.data,dataLength:data.data?.length,dataKeys:Object.keys(data)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-  // #endregion
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/77853d40-2630-465b-b1da-310f30bd4208',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'marketData.ts:23',message:'fetchMarketData exit',data:{returnLength:data.data?.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-  // #endregion
-  return data.data;
+  let data: any;
+  try {
+    data = await response.json();
+  } catch (parseError) {
+    throw new Error('Failed to parse response');
+  }
+
+  if (!data.data) {
+    throw new Error('Response missing data property');
+  }
+
+  if (!Array.isArray(data.data)) {
+    throw new Error('Response data is not an array');
+  }
+
+  const visibleStartIndex =
+    typeof data.visibleStartIndex === 'number' && Number.isFinite(data.visibleStartIndex) && data.visibleStartIndex >= 0
+      ? Math.floor(data.visibleStartIndex)
+      : 0;
+
+  const emaWarmupBars =
+    typeof data.emaWarmupBars === 'number' && Number.isFinite(data.emaWarmupBars) && data.emaWarmupBars >= 0
+      ? Math.floor(data.emaWarmupBars)
+      : visibleStartIndex;
+
+  return {
+    data: data.data as MarketDataPoint[],
+    visibleStartIndex,
+    emaWarmupBars,
+    freshness: (data.freshness as DataFreshness | undefined) ?? freshnessFromBars(data.data),
+  };
 }
 
 // Calculate EMA (Exponential Moving Average)
@@ -60,20 +133,15 @@ export function calculateEMA(data: number[], period: number): (number | undefine
 
 // Add EMAs to market data
 export function addIndicators(data: MarketDataPoint[]): MarketDataPoint[] {
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/77853d40-2630-465b-b1da-310f30bd4208',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'marketData.ts:47',message:'addIndicators entry',data:{dataLength:data.length,firstPoint:data[0]?{timestamp:data[0].timestamp,close:data[0].close}:null},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
-  // #endregion
+  if (!data || data.length === 0) {
+    return [];
+  }
+  
   const closes = data.map((d) => d.close);
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/77853d40-2630-465b-b1da-310f30bd4208',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'marketData.ts:50',message:'addIndicators closes extracted',data:{closesLength:closes.length,firstClose:closes[0],hasNaN:closes.some(c=>isNaN(c))},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
-  // #endregion
 
   const ema9 = calculateEMA(closes, 9);
   const ema21 = calculateEMA(closes, 21);
   const ema50 = calculateEMA(closes, 50);
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/77853d40-2630-465b-b1da-310f30bd4208',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'marketData.ts:54',message:'addIndicators EMAs calculated',data:{ema9Length:ema9.length,ema21Length:ema21.length,ema50Length:ema50.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
-  // #endregion
 
   const result = data.map((point, i) => ({
     ...point,
@@ -81,10 +149,34 @@ export function addIndicators(data: MarketDataPoint[]): MarketDataPoint[] {
     ema21: ema21[i],
     ema50: ema50[i],
   }));
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/77853d40-2630-465b-b1da-310f30bd4208',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'marketData.ts:61',message:'addIndicators exit',data:{resultLength:result.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
-  // #endregion
+  
   return result;
+}
+
+// Calculate indicators on full data, then trim warmup bars before display
+export function addIndicatorsAndTrim(data: MarketDataPoint[], visibleStartIndex: number): MarketDataPoint[] {
+  const withIndicators = addIndicators(data);
+  if (!withIndicators.length) return [];
+
+  const safeIndex =
+    Number.isFinite(visibleStartIndex) && visibleStartIndex > 0
+      ? Math.min(Math.floor(visibleStartIndex), withIndicators.length)
+      : 0;
+
+  const trimmed = withIndicators.slice(safeIndex);
+
+  return trimmed;
+}
+
+// Convenience function: fetch + add indicators + trim warmup
+export async function fetchMarketDataWithIndicators(
+  symbol: string,
+  interval: ChartInterval = '3mo'
+): Promise<{ data: MarketDataPoint[]; freshness?: DataFreshness }> {
+  const { data, visibleStartIndex, freshness } = await fetchMarketData(symbol, interval);
+  const trimmed = addIndicatorsAndTrim(data, visibleStartIndex);
+  rememberFreshness(freshness);
+  return { data: trimmed, freshness };
 }
 
 // Format price for display

@@ -2,7 +2,7 @@ import { config } from 'dotenv';
 import { resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
-import { existsSync, appendFileSync } from 'fs';
+import { existsSync } from 'fs';
 import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
@@ -13,28 +13,15 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const envPath = resolve(__dirname, '../.env');
 
-// #region agent log
-try{const logPath='c:\\Users\\Art\\VScode\\chartsignl\\.cursor\\debug.log';appendFileSync(logPath,JSON.stringify({location:'index.ts:14',message:'checking env file',data:{envPath,exists:existsSync(envPath),cwd:process.cwd(),dirname:__dirname},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})+'\n');}catch(e: unknown){console.error('Log error:',e instanceof Error?e.message:String(e));}
-// #endregion
-
 if (existsSync(envPath)) {
   const result = config({ path: envPath });
   if (result.error) {
     console.error('Error loading .env file:', result.error);
-    // #region agent log
-    try{const logPath='c:\\Users\\Art\\VScode\\chartsignl\\.cursor\\debug.log';appendFileSync(logPath,JSON.stringify({location:'index.ts:19',message:'env file load error',data:{error:result.error.message},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})+'\n');}catch(e: unknown){console.error('Log error:',e instanceof Error?e.message:String(e));}
-    // #endregion
   } else {
     console.log(`✓ Loaded .env from: ${envPath}`);
-    // #region agent log
-    try{const logPath='c:\\Users\\Art\\VScode\\chartsignl\\.cursor\\debug.log';appendFileSync(logPath,JSON.stringify({location:'index.ts:22',message:'env file loaded',data:{envPath,parsed:Object.keys(result.parsed||{}),massiveKeyInParsed:!!result.parsed?.MASSIVE_API_KEY},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})+'\n');}catch(e: unknown){console.error('Log error:',e instanceof Error?e.message:String(e));}
-    // #endregion
   }
 } else {
   console.warn(`⚠️  .env file not found at: ${envPath}`);
-  // #region agent log
-  try{const logPath='c:\\Users\\Art\\VScode\\chartsignl\\.cursor\\debug.log';appendFileSync(logPath,JSON.stringify({location:'index.ts:25',message:'env file not found',data:{envPath,fallback:true},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})+'\n');}catch(e: unknown){console.error('Log error:',e instanceof Error?e.message:String(e));}
-  // #endregion
   config(); // Fallback to default dotenv behavior
 }
 
@@ -42,19 +29,42 @@ if (existsSync(envPath)) {
 console.log('Environment variables loaded:');
 const massiveKeyStatus = process.env.MASSIVE_API_KEY ? `✓ Set (${process.env.MASSIVE_API_KEY.length} chars)` : '✗ Missing';
 console.log(`  MASSIVE_API_KEY: ${massiveKeyStatus}`);
+console.log(`  FMP_API_KEY: ${process.env.FMP_API_KEY ? '✓ Set' : '✗ Missing (optional calendar provider)'}`);
+console.log(`  ALPHAVANTAGE_API_KEY: ${process.env.ALPHAVANTAGE_API_KEY ? '✓ Set' : '✗ Missing (optional calendar provider)'}`);
+console.log(`  FINNHUB_API_KEY: ${process.env.FINNHUB_API_KEY ? '✓ Set' : '✗ Missing (optional calendar provider)'}`);
 console.log(`  SUPABASE_URL: ${process.env.SUPABASE_URL ? '✓ Set' : '✗ Missing'}`);
 console.log(`  OPENAI_API_KEY: ${process.env.OPENAI_API_KEY ? '✓ Set' : '✗ Missing'}`);
-
-// #region agent log
-try{const logPath='c:\\Users\\Art\\VScode\\chartsignl\\.cursor\\debug.log';appendFileSync(logPath,JSON.stringify({location:'index.ts:33',message:'env vars after load',data:{hasMassiveKey:!!process.env.MASSIVE_API_KEY,massiveKeyLength:process.env.MASSIVE_API_KEY?.length||0,allEnvKeys:Object.keys(process.env).filter(k=>k.includes('MASSIVE')||k.includes('massive')),cwd:process.cwd()},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})+'\n');}catch(e: unknown){console.error('Log error:',e instanceof Error?e.message:String(e));}
-// #endregion
+console.log(`  SMTP (deletion emails): ${process.env.SMTP_HOST && process.env.SMTP_USER ? '✓ Set' : '✗ Optional'}`);
+console.log(`  CRON_SECRET (push price checks): ${process.env.CRON_SECRET ? '✓ Set' : '✗ Missing (n8n /check-prices will fail)'}`);
+console.log(`  SENDGRID_API_KEY (briefs + newsletter): ${process.env.SENDGRID_API_KEY ? '✓ Set' : '✗ Missing (brief/newsletter send will fail)'}`);
+console.log(`  SENDGRID_WEBHOOK_PUBLIC_KEY: ${process.env.SENDGRID_WEBHOOK_PUBLIC_KEY ? '✓ Set' : '✗ Missing (newsletter webhook will reject)'}`);
+  console.log(`  NEWSLETTER_API_SECRET: ${process.env.NEWSLETTER_API_SECRET ? '✓ Set' : '✗ Missing (POST /api/newsletter/send will fail)'}`);
+  console.log(`  WEEKLY_CONTENT_INGEST_SECRET: ${process.env.WEEKLY_CONTENT_INGEST_SECRET ? '✓ Set' : '✗ Missing (ingest will fail)'}`);
+  console.log(`  REELS_CODE_SECRET: ${process.env.REELS_CODE_SECRET ? '✓ Set' : '✗ Missing (reels publish/code will fail)'}`);
+console.log(`  ENABLE_RESOLVER_CRON: ${process.env.ENABLE_RESOLVER_CRON === 'true' ? '✓ On' : 'off'}`);
+console.log(`  ENABLE_CALENDAR_CRON: ${process.env.ENABLE_CALENDAR_CRON === 'true' ? '✓ On' : 'off'}`);
 
 // Routes
 import analyzeDataRoute from './routes/analyzeData.js';
+import analyzeGuestRoute from './routes/analyzeGuest.js';
 import historyRoute from './routes/history.js';
 import userRoute from './routes/user.js';
 import marketDataRoute from './routes/marketData.js';
 import subscriptionRoute from './routes/subscription.js';
+import authRoute from './routes/auth.js';
+import deleteAccountRoute from './routes/delete-account.js';
+import webhooksRoute from './routes/webhooks.js';
+import socialRoute from './routes/social.js';
+import predictRoute from './routes/predict.js';
+import predictionsRoute from './routes/predictions.js';
+import notificationRoutes from './routes/notifications.js';
+import testAlertRoute from './routes/test-alert.js';
+import { internalWeeklyBriefRoute, publicWeeklyBriefRoute } from './routes/weeklyBrief.js';
+import { internalDailyBriefRoute, publicDailyBriefRoute } from './routes/dailyBrief.js';
+import newsletterRoute from './routes/newsletter.js';
+import reelsRoute from './routes/reels.js';
+import { startResolverSchedule } from './lib/resolverSchedule.js';
+import { startCalendarSchedule } from './lib/calendarSchedule.js';
 
 const app = new Hono();
 
@@ -63,28 +73,43 @@ app.use('*', logger());
 
 // Request logging middleware
 app.use('*', async (c, next) => {
-  console.log('[MIDDLEWARE] Incoming request:', c.req.method, c.req.path, c.req.url);
-  // #region agent log
-  try{const logPath='c:\\Users\\Art\\VScode\\chartsignl\\.cursor\\debug.log';appendFileSync(logPath,JSON.stringify({location:'index.ts:65',message:'incoming request',data:{method:c.req.method,path:c.req.path,url:c.req.url},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'A'})+'\n');}catch(e: unknown){console.error('Log error:',e instanceof Error?e.message:String(e));}
-  // #endregion
+  const origin = c.req.header('origin');
+  console.log('[MIDDLEWARE] Incoming request:', c.req.method, c.req.path, c.req.url, 'Origin:', origin);
   await next();
 });
 
 // CORS configuration
-const corsOrigins = process.env.CORS_ORIGINS?.split(',') || [
+const defaultOrigins = [
   'http://localhost:8081',
   'http://localhost:19006',
   'http://localhost:3000',
   'https://app.chartsignl.com',
   'https://chartsignl.com',
+  'https://www.chartsignl.com',
 ];
 
+// Merge env var origins with defaults, ensuring www.chartsignl.com is always included
+const envOrigins = process.env.CORS_ORIGINS?.split(',').map(o => o.trim()).filter(Boolean) || [];
+const corsOrigins = [...new Set([...envOrigins, ...defaultOrigins])]; // Remove duplicates
+
 app.use('*', cors({
-  origin: corsOrigins,
+  origin: (origin) => {
+    if (!origin) return corsOrigins[0];
+    return corsOrigins.includes(origin) ? origin : null;
+  },
   credentials: true,
-  allowHeaders: ['Content-Type', 'Authorization'],
+  allowHeaders: ['Content-Type', 'Authorization', 'x-reels-code', 'x-reels-owner-secret'],
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
 }));
+
+// Root - avoid 404 for GET /
+app.get('/', (c) => {
+  return c.json({
+    name: 'ChartSignl API',
+    version: '1.0.0',
+    docs: '/health (health check), /api/* (API routes)',
+  });
+});
 
 // Health check
 app.get('/health', (c) => {
@@ -96,41 +121,36 @@ app.get('/health', (c) => {
   });
 });
 
-// Debug endpoint - add this right after the /health endpoint
-app.get('/debug-env', (c) => {
-  const key = process.env.MASSIVE_API_KEY || '';
-  return c.json({
-    hasKey: !!key,
-    keyLength: key.length,
-    keyPreview: key ? key.substring(0, 4) + '...' : 'EMPTY'
-  });
-});
-
 // API Routes
 app.route('/api/analyze-data', analyzeDataRoute);
+app.route('/api/analyze-guest', analyzeGuestRoute);
 app.route('/api/analyses', historyRoute);
 app.route('/api/user', userRoute);
 app.route('/api/market-data', marketDataRoute);
 app.route('/api/subscription', subscriptionRoute);
-
-// #region agent log
-try{const logPath='c:\\Users\\Art\\VScode\\chartsignl\\.cursor\\debug.log';appendFileSync(logPath,JSON.stringify({location:'index.ts:94',message:'routes registered',data:{routes:['analyze-data','analyses','user','market-data','subscription']},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})+'\n');}catch(e: unknown){console.error('Log error:',e instanceof Error?e.message:String(e));}
-// #endregion
+app.route('/api/auth', authRoute);
+app.route('/api/auth', deleteAccountRoute);
+app.route('/webhooks', webhooksRoute);
+app.route('/api/social', socialRoute);
+app.route('/api/predict', predictRoute);
+app.route('/api/predictions', predictionsRoute);
+app.route('/api/notifications', notificationRoutes);
+app.route('/api/test-alert', testAlertRoute);
+app.route('/api/internal/weekly-brief', internalWeeklyBriefRoute);
+app.route('/api/weekly-brief', publicWeeklyBriefRoute);
+app.route('/api/internal/daily-brief', internalDailyBriefRoute);
+app.route('/api/daily-brief', publicDailyBriefRoute);
+app.route('/api/newsletter', newsletterRoute);
+app.route('/api/reels', reelsRoute);
 
 // 404 handler
 app.notFound((c) => {
-  // #region agent log
-  try{const logPath='c:\\Users\\Art\\VScode\\chartsignl\\.cursor\\debug.log';appendFileSync(logPath,JSON.stringify({location:'index.ts:97',message:'404 not found',data:{method:c.req.method,path:c.req.path,url:c.req.url},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})+'\n');}catch(e: unknown){console.error('Log error:',e instanceof Error?e.message:String(e));}
-  // #endregion
   return c.json({ error: 'Not found' }, 404);
 });
 
 // Error handler
 app.onError((err, c) => {
   console.error('Server error:', err);
-  // #region agent log
-  try{const logPath='c:\\Users\\Art\\VScode\\chartsignl\\.cursor\\debug.log';appendFileSync(logPath,JSON.stringify({location:'index.ts:102',message:'server error handler',data:{error:err.message,stack:err.stack,path:c.req.path,method:c.req.method},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})+'\n');}catch(e: unknown){console.error('Log error:',e instanceof Error?e.message:String(e));}
-  // #endregion
   return c.json({
     error: 'Internal server error',
     message: process.env.NODE_ENV === 'development' ? err.message : undefined,
@@ -178,6 +198,7 @@ console.log(`
 ║                                                   ║
 ║   Running on: http://localhost:${port}              ║
 ║   Environment: ${process.env.NODE_ENV || 'development'}                    ║
+║   CORS Origins: ${corsOrigins.join(', ')}         ║
 ║                                                   ║
 ╚═══════════════════════════════════════════════════╝
 `);
@@ -186,5 +207,8 @@ serve({
   fetch: app.fetch,
   port,
 });
+
+startResolverSchedule();
+startCalendarSchedule();
 
 export default app;

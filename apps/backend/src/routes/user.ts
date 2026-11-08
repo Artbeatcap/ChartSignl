@@ -1,9 +1,30 @@
 import { Hono } from 'hono';
 import { supabaseAdmin, getUserFromToken } from '../lib/supabase.js';
 import type { UsageResponse, AuthResponse } from '@chartsignl/core';
-import { FREE_ANALYSIS_LIMIT } from '@chartsignl/core';
+import { FREE_ANALYSIS_LIMIT, FREE_PREDICTION_LIMIT } from '@chartsignl/core';
+import { getSubscriptionForUser, setSubscriptionForUser } from '../lib/newsletter.js';
 
 const userRoute = new Hono();
+
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
+function getEffectiveUsedThisWeek(
+  usage: { free_analyses_used: number; last_analysis_at: string | null } | null | undefined
+): number {
+  if (!usage) return 0;
+  if (!usage.last_analysis_at) return 0;
+  const elapsed = Date.now() - new Date(usage.last_analysis_at).getTime();
+  return elapsed < WEEK_MS ? usage.free_analyses_used : 0;
+}
+
+function getEffectivePredictionsThisWeek(
+  usage: { free_predictions_used?: number | null; last_prediction_at?: string | null } | null | undefined
+): number {
+  if (!usage) return 0;
+  if (!usage.last_prediction_at) return 0;
+  const elapsed = Date.now() - new Date(usage.last_prediction_at).getTime();
+  return elapsed < WEEK_MS ? (usage.free_predictions_used ?? 0) : 0;
+}
 
 // GET /api/user/me - Get current user profile
 userRoute.get('/me', async (c) => {
@@ -39,12 +60,14 @@ userRoute.get('/me', async (c) => {
       }, 404);
     }
 
-    // Also get usage
+    // Also get usage (maybeSingle: no error when 0 rows)
     const { data: usage } = await supabaseAdmin
       .from('usage_counters')
-      .select('free_analyses_used')
+      .select('free_analyses_used, last_analysis_at')
       .eq('user_id', userId)
-      .single();
+      .maybeSingle();
+
+    const effectiveUsed = getEffectiveUsedThisWeek(usage ?? undefined);
 
     return c.json<AuthResponse>({
       success: true,
@@ -57,7 +80,9 @@ userRoute.get('/me', async (c) => {
         experienceLevel: profile.experience_level,
         stressReducer: profile.stress_reducer,
         isPro: profile.is_pro || false,
-        freeAnalysesUsed: usage?.free_analyses_used || 0,
+        freeAnalysesUsed: effectiveUsed,
+        pushNotificationsEnabled: profile.push_notifications_enabled ?? true,
+        alertSoundEnabled: profile.alert_sound_enabled ?? true,
       },
     });
 
@@ -156,14 +181,19 @@ userRoute.get('/usage', async (c) => {
 
     const { data: usage } = await supabaseAdmin
       .from('usage_counters')
-      .select('free_analyses_used')
+      .select('free_analyses_used, last_analysis_at, free_predictions_used, last_prediction_at')
       .eq('user_id', userId)
-      .single();
+      .maybeSingle();
+
+    const effectiveUsed = getEffectiveUsedThisWeek(usage ?? undefined);
+    const effectivePredictionsUsed = getEffectivePredictionsThisWeek(usage ?? undefined);
 
     return c.json<UsageResponse>({
       success: true,
-      freeAnalysesUsed: usage?.free_analyses_used || 0,
+      freeAnalysesUsed: effectiveUsed,
       freeAnalysesLimit: FREE_ANALYSIS_LIMIT,
+      freePredictionsUsed: effectivePredictionsUsed,
+      freePredictionsLimit: FREE_PREDICTION_LIMIT,
       isPro: profile?.is_pro || false,
     });
 
@@ -174,6 +204,52 @@ userRoute.get('/usage', async (c) => {
       error: error instanceof Error ? error.message : 'Internal server error',
     }, 500);
   }
+});
+
+userRoute.get('/newsletter', async (c) => {
+  const authHeader = c.req.header('Authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    return c.json({ success: false, error: 'Missing authorization token' }, 401);
+  }
+  const userId = await getUserFromToken(authHeader.slice(7));
+  if (!userId) {
+    return c.json({ success: false, error: 'Invalid authorization token' }, 401);
+  }
+
+  const result = await getSubscriptionForUser(userId);
+  return c.json({
+    success: true,
+    subscribed: result.subscribed,
+    status: result.status,
+  });
+});
+
+userRoute.put('/newsletter', async (c) => {
+  const authHeader = c.req.header('Authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    return c.json({ success: false, error: 'Missing authorization token' }, 401);
+  }
+  const userId = await getUserFromToken(authHeader.slice(7));
+  if (!userId) {
+    return c.json({ success: false, error: 'Invalid authorization token' }, 401);
+  }
+
+  let body: { subscribed?: unknown };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ success: false, error: 'Invalid JSON body' }, 400);
+  }
+  if (typeof body.subscribed !== 'boolean') {
+    return c.json({ success: false, error: 'subscribed must be a boolean' }, 400);
+  }
+
+  const result = await setSubscriptionForUser(userId, body.subscribed);
+  return c.json({
+    success: true,
+    subscribed: result.status === 'subscribed',
+    status: result.status,
+  });
 });
 
 export default userRoute;

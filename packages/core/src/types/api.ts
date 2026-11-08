@@ -41,6 +41,7 @@ export interface GetAnalysisResponse {
   success: boolean;
   analysis?: ChartAnalysis;
   createdAt?: string;
+  predictionId?: string;
   error?: string;
 }
 
@@ -49,6 +50,8 @@ export interface UsageResponse {
   success: boolean;
   freeAnalysesUsed?: number;
   freeAnalysesLimit?: number;
+  freePredictionsUsed?: number;
+  freePredictionsLimit?: number;
   isPro?: boolean;
   error?: string;
 }

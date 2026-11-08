@@ -1,36 +1,48 @@
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Alert, Platform, Linking } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Platform, Linking } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { Card, Button, EmailVerificationBanner } from '../../components';
 import { useAuthStore } from '../../store/authStore';
 import { getCurrentUser, getUsage } from '../../lib/api';
+import { getWeeklyAtlasLimit, getWeeklyAtlasUsed } from '../../lib/usage';
 import { colors, typography, spacing, borderRadius, shadows } from '../../theme';
-import { FREE_ANALYSIS_LIMIT, TRADING_STYLE_OPTIONS } from '@chartsignl/core';
-import { useEffect } from 'react';
+import { TRADING_STYLE_OPTIONS } from '@chartsignl/core';
+import { useEffect, useCallback, useState } from 'react';
+import { API_URL } from '../../lib/apiConfig';
+import { getExpoPushToken, unregisterPushToken, usePushNotifications } from '../../lib/usePushNotifications';
+import { pushDebugProbe } from '../../lib/pushDebug';
+import Constants from 'expo-constants';
 
 export default function ProfileScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { user, signOut, isPremium, checkSubscriptionStatus, isEmailVerified, refreshSubscription } = useAuthStore();
+  const { user, signOut, isPremium, checkSubscriptionStatus, isEmailVerified, refreshSubscription, checkEmailVerification, session } = useAuthStore();
+  const pushState = usePushNotifications();
 
   const { data: profileData } = useQuery({
     queryKey: ['profile'],
     queryFn: getCurrentUser,
+    enabled: !!user,
   });
 
   const { data: usageData } = useQuery({
     queryKey: ['usage'],
     queryFn: getUsage,
+    enabled: !!user,
   });
 
   const profile = profileData?.user;
   const usage = usageData;
-  
-  // Calculate remaining analyses for display
-  const remainingAnalyses = usage?.isPro 
-    ? Infinity 
-    : (usage?.freeAnalysesLimit || FREE_ANALYSIS_LIMIT) - (usage?.freeAnalysesUsed || 0);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  // Higher of the two counters, so a partial run still counts as used.
+  const weeklyAtlasUsed = Math.min(getWeeklyAtlasUsed(usage), getWeeklyAtlasLimit(usage));
+  const weeklyAtlasLimit = getWeeklyAtlasLimit(usage);
+  const remainingAtlasRuns = usage?.isPro
+    ? Infinity
+    : weeklyAtlasLimit - weeklyAtlasUsed;
 
   useEffect(() => {
     // Check subscription status on mount
@@ -38,6 +50,21 @@ export default function ProfileScreen() {
       checkSubscriptionStatus();
     }
   }, [user, checkSubscriptionStatus]);
+
+  // Periodically check email verification status when page is visible
+  useEffect(() => {
+    if (!isEmailVerified && user) {
+      // Check immediately on mount
+      checkEmailVerification();
+      
+      // Check every 10 seconds while on this page
+      const interval = setInterval(() => {
+        checkEmailVerification();
+      }, 10000);
+
+      return () => clearInterval(interval);
+    }
+  }, [isEmailVerified, user, checkEmailVerification]);
 
   const handleUpgrade = () => {
     router.push('/premium');
@@ -50,17 +77,14 @@ export default function ProfileScreen() {
       } else if (Platform.OS === 'android') {
         await Linking.openURL('https://play.google.com/store/account/subscriptions');
       } else {
-        Alert.alert(
-          'Manage Subscription',
-          'Please manage your subscription through the App Store or Google Play Store where you originally subscribed.',
-          [{ text: 'OK' }]
-        );
+        // For web, redirect to premium screen where they can manage Stripe subscription
+        router.push('/premium');
       }
     } catch (error) {
       console.error('Error opening subscription management:', error);
       Alert.alert(
         'Error',
-        'Unable to open subscription management. Please go to your device\'s Settings > Subscriptions to manage your subscription.',
+        'Unable to open subscription management. Please try again.',
         [{ text: 'OK' }]
       );
     }
@@ -68,15 +92,25 @@ export default function ProfileScreen() {
 
   const performSignOut = async () => {
     try {
+      // Deactivate push token on logout so the user stops receiving notifications.
+      if (Platform.OS !== 'web') {
+        const token = getExpoPushToken();
+        const accessToken = session?.access_token;
+
+        if (token && accessToken) {
+          await unregisterPushToken(token, accessToken);
+        }
+      }
+
       const success = await signOut();
-      
+
       if (success) {
         // Clear React Query cache after successful sign out
         queryClient.clear();
-        
+
         // Use setTimeout to ensure state updates have propagated
         setTimeout(() => {
-          router.replace('/');
+          router.replace('/(onboarding)/home');
         }, 100);
       } else {
         Alert.alert('Error', 'Failed to sign out. Please try again.');
@@ -103,33 +137,166 @@ export default function ProfileScreen() {
         {
           text: 'Sign Out',
           style: 'destructive',
-          onPress: performSignOut, // Pass function reference, not async inline
+          onPress: performSignOut,
         },
       ]
     );
   };
 
+  const handleDeleteAccount = async () => {
+    const email = user?.email ?? profile?.email;
+    if (!email) {
+      if (Platform.OS === 'web') {
+        window.alert('Unable to determine your email. Please sign out and try again.');
+      } else {
+        Alert.alert('Error', 'Unable to determine your email. Please sign out and try again.', [{ text: 'OK' }]);
+      }
+      return;
+    }
+
+    const runApiAndShowResult = async () => {
+      setIsDeleting(true);
+      try {
+        const response = await fetch(`${API_URL}/api/auth/delete-account`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email,
+            reason: 'User requested deletion from app settings',
+          }),
+        });
+
+        if (response.ok) {
+          const successTitle = 'Check Your Email';
+          const successMessage = `We've sent a confirmation link to ${email}. Click the link to complete your account deletion. The link expires in 24 hours.`;
+          if (Platform.OS === 'web') {
+            window.alert(`${successTitle}\n\n${successMessage}`);
+            await performSignOut();
+          } else {
+            Alert.alert(successTitle, successMessage, [
+              { text: 'OK', onPress: performSignOut },
+            ]);
+          }
+        } else {
+          const errorMessage = 'Failed to process deletion request. Please try again or contact support@chartsignl.com';
+          if (Platform.OS === 'web') {
+            window.alert(`Error\n\n${errorMessage}`);
+          } else {
+            Alert.alert('Error', errorMessage, [{ text: 'OK' }]);
+          }
+        }
+      } catch (err) {
+        console.error('Delete account request error:', err);
+        const errorMessage = 'Failed to process deletion request. Please try again or contact support@chartsignl.com';
+        if (Platform.OS === 'web') {
+          window.alert(`Error\n\n${errorMessage}`);
+        } else {
+          Alert.alert('Error', errorMessage, [{ text: 'OK' }]);
+        }
+      } finally {
+        setIsDeleting(false);
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      const confirmed = window.confirm(
+        'This will permanently delete your account and all data. Continue?'
+      );
+      if (!confirmed) return;
+      const reallyConfirmed = window.confirm(
+        'Are you sure? A confirmation email will be sent to complete the deletion.'
+      );
+      if (!reallyConfirmed) return;
+      await runApiAndShowResult();
+      return;
+    }
+
+    // Native: two-step Alert
+    Alert.alert(
+      'Delete Account',
+      'This will permanently delete your ChartSignl account, including all your saved analyses, preferences, and subscription data. This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Continue',
+          onPress: () => {
+            Alert.alert(
+              'Are you sure?',
+              `A confirmation email will be sent to ${email}. You'll need to click the link in that email to complete the deletion.`,
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Delete My Account',
+                  style: 'destructive',
+                  onPress: runApiAndShowResult,
+                },
+              ]
+            );
+          },
+        },
+      ]
+    );
+  };
+
+  // Helper function to show verification required alert
+  const showVerificationRequiredAlert = useCallback((featureName: string) => {
+    if (Platform.OS === 'web') {
+      window.alert(`Please verify your email to ${featureName}.\n\nCheck your inbox for the verification link, or use the "Resend" button above.`);
+    } else {
+      Alert.alert(
+        'Email Verification Required',
+        `Please verify your email to ${featureName}.\n\nCheck your inbox for the verification link, or use the "Resend" button above.`,
+        [{ text: 'OK' }]
+      );
+    }
+  }, []);
+
+  // Wrapper for settings actions that require verification
+  const requireVerification = useCallback((action: () => void, featureName: string) => {
+    if (!isEmailVerified) {
+      showVerificationRequiredAlert(featureName);
+      return;
+    }
+    action();
+  }, [isEmailVerified, showVerificationRequiredAlert]);
+
   const handleEditProfile = () => {
-    router.push('/(settings)/edit-profile');
+    requireVerification(() => router.push('/(settings)/edit-profile'), 'edit your profile');
+  };
+
+  const handleChangePassword = () => {
+    requireVerification(() => router.push('/(settings)/change-password'), 'change your password');
   };
 
   const handleNotifications = () => {
-    router.push('/(settings)/notifications');
+    requireVerification(() => router.push('/notification-settings'), 'manage notifications');
   };
 
   const handleHelp = () => {
+    // Help is always accessible
     router.push('/(settings)/help');
   };
 
   const handlePrivacy = () => {
-    router.push('/(settings)/privacy');
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.location.href = '/privacy';
+    } else {
+      Linking.openURL('https://chartsignl.com/privacy');
+    }
   };
 
   const handleTerms = () => {
+    // Terms are always accessible
     router.push('/(settings)/terms');
   };
 
   const handleRestorePurchases = async () => {
+    // Restore purchases requires verification
+    if (!isEmailVerified) {
+      showVerificationRequiredAlert('restore purchases');
+      return;
+    }
+
     try {
       const Purchases = (await import('react-native-purchases')).default;
 
@@ -163,8 +330,71 @@ export default function ProfileScreen() {
     }
   };
 
+  // Helper to render setting item with optional disabled state
+  const renderSettingItem = (
+    icon: keyof typeof Ionicons.glyphMap,
+    text: string,
+    onPress: () => void,
+    requiresVerification: boolean = true
+  ) => {
+    const isDisabled = requiresVerification && !isEmailVerified;
+    
+    return (
+      <TouchableOpacity 
+        style={[styles.settingsItem, isDisabled && styles.settingsItemDisabled]} 
+        onPress={onPress}
+      >
+        <View style={styles.settingsItemLeft}>
+          <Ionicons 
+            name={icon} 
+            size={24} 
+            color={isDisabled ? colors.neutral[400] : colors.neutral[600]} 
+          />
+          <Text style={[styles.settingsItemText, isDisabled && styles.settingsItemTextDisabled]}>
+            {text}
+          </Text>
+          {isDisabled && (
+            <View style={styles.verificationBadge}>
+              <Ionicons name="mail-outline" size={12} color={colors.amber[600]} />
+            </View>
+          )}
+        </View>
+        <Ionicons 
+          name="chevron-forward" 
+          size={20} 
+          color={isDisabled ? colors.neutral[300] : colors.neutral[400]} 
+        />
+      </TouchableOpacity>
+    );
+  };
+
+  if (!user) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.webWrapper}>
+          <View style={styles.webInner}>
+            <View style={styles.guestWrap}>
+              <Ionicons name="person-circle-outline" size={72} color={colors.neutral[300]} />
+              <Text style={styles.guestTitle}>Sign in to your account</Text>
+              <Text style={styles.guestSubtitle}>
+                Profile, weekly usage, and settings are available after you create a free account.
+              </Text>
+              <Button
+                title="Create a free account"
+                onPress={() => router.push('/(onboarding)/account')}
+                size="lg"
+                fullWidth
+                style={styles.guestButton}
+              />
+            </View>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.webWrapper}>
         <View style={styles.webInner}>
           <ScrollView
@@ -174,6 +404,22 @@ export default function ProfileScreen() {
           >
         {/* Email Verification Banner */}
         {!isEmailVerified && <EmailVerificationBanner variant="banner" />}
+
+        {Platform.OS !== 'web' && pushState.error && (
+          <View style={styles.pushBanner}>
+            <Ionicons name="notifications-off-outline" size={18} color={colors.warning} />
+            <Text style={styles.pushBannerText}>{pushState.error}</Text>
+          </View>
+        )}
+
+        {Platform.OS !== 'web' && !pushState.error && !pushState.expoPushToken && (
+          <View style={styles.pushBanner}>
+            <Ionicons name="notifications-outline" size={18} color={colors.neutral[600]} />
+            <Text style={styles.pushBannerText}>
+              Registering this device for price alerts…
+            </Text>
+          </View>
+        )}
         
         {/* Header */}
         <View style={styles.header}>
@@ -184,108 +430,82 @@ export default function ProfileScreen() {
           </View>
           <Text style={styles.name}>{profile?.displayName || 'Trader'}</Text>
           <Text style={styles.email}>{user?.email}</Text>
+          {!isEmailVerified && (
+            <View style={styles.unverifiedBadge}>
+              <Ionicons name="alert-circle" size={14} color={colors.amber[600]} />
+              <Text style={styles.unverifiedText}>Email not verified</Text>
+            </View>
+          )}
         </View>
 
         {/* Premium Upgrade Card */}
         {!isPremium ? (
           <Card style={styles.upgradeCard}>
             <View style={styles.upgradeContent}>
-              <View style={styles.upgradeIconContainer}>
-                <Ionicons name="star" size={32} color={colors.primary[600]} />
+              <View style={styles.upgradeIcon}>
+                <Text style={styles.upgradeIconText}>⚡</Text>
               </View>
               <View style={styles.upgradeTextContainer}>
-                <Text style={styles.upgradeTitle}>Upgrade to Premium</Text>
-                <Text style={styles.upgradeDescription}>
-                  Unlimited analysis for $4.99/month
+                <Text style={styles.upgradeTitle}>Upgrade to Pro</Text>
+                <Text style={styles.upgradeSubtitle}>
+                  Unlimited analyses & premium features
                 </Text>
               </View>
             </View>
             <Button
-              title="View Premium Features"
+              title="Upgrade"
               onPress={handleUpgrade}
-              variant="primary"
-              fullWidth
+              size="sm"
               style={styles.upgradeButton}
             />
           </Card>
         ) : (
-          <Card style={styles.premiumActiveCard}>
-            <View style={styles.premiumActiveContent}>
-              <View style={styles.premiumBadge}>
-                <Ionicons name="star" size={20} color={colors.primary[500]} />
-                <Text style={styles.premiumBadgeText}>Premium</Text>
-              </View>
-              <Text style={styles.premiumPriceText}>$4.99/month</Text>
+          <Card style={styles.premiumCard}>
+            <View style={styles.premiumBadge}>
+              <Ionicons name="star" size={20} color={colors.amber[500]} />
+              <Text style={styles.premiumBadgeText}>Premium</Text>
             </View>
-            <Text style={styles.premiumActiveText}>
-              You have access to all premium features
+            <Text style={styles.premiumDescription}>
+              You have unlimited Atlas runs
             </Text>
-            <TouchableOpacity 
-              style={styles.manageSubscriptionLink}
-              onPress={handleUpgrade}
-            >
-              <Text style={styles.manageSubscriptionText}>View Benefits & Manage Subscription</Text>
-              <Ionicons name="chevron-forward" size={16} color={colors.primary[500]} />
-            </TouchableOpacity>
           </Card>
         )}
 
-        {/* Usage Card */}
-        <Card style={styles.usageCard}>
-          <View style={styles.usageHeader}>
-            <Text style={styles.usageTitle}>
-              {usage?.isPro ? '✨ Pro Plan' : 'Free Plan'}
+        {/* Usage Card (for free users) */}
+        {!isPremium && (
+          <Card style={styles.usageCard}>
+            <Text style={styles.usageTitle}>Weekly Usage</Text>
+            <Text style={styles.usageCount}>
+              {remainingAtlasRuns === Infinity ? '∞' : Math.max(0, remainingAtlasRuns)} Atlas runs remaining
             </Text>
-            {!usage?.isPro && (
-              <TouchableOpacity onPress={handleUpgrade}>
-                <Text style={styles.upgradeLink}>Upgrade</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-
-          <View style={styles.usageStats}>
-            <View style={styles.usageStat}>
-              <Text style={styles.usageNumber}>
-                {usage?.isPro ? '∞' : remainingAnalyses}
-              </Text>
-              <Text style={styles.usageLabel}>
-                {usage?.isPro ? 'Unlimited' : 'Analyses Left'}
-              </Text>
+            <View style={styles.usageProgressBar}>
+              <View 
+                style={[
+                  styles.usageProgressFill, 
+                  { 
+                    width: `${Math.min(100, (weeklyAtlasUsed / weeklyAtlasLimit) * 100)}%` 
+                  }
+                ]} 
+              />
             </View>
-            <View style={styles.usageDivider} />
-            <View style={styles.usageStat}>
-              <Text style={styles.usageNumber}>{usage?.freeAnalysesUsed || 0}</Text>
-              <Text style={styles.usageLabel}>Total Analyses</Text>
-            </View>
-          </View>
-
-          {!usage?.isPro && (
-            <View style={styles.usageProgress}>
-              <View style={styles.usageProgressBar}>
-                <View
-                  style={[
-                    styles.usageProgressFill,
-                    { width: `${((usage?.freeAnalysesUsed || 0) / (usage?.freeAnalysesLimit || FREE_ANALYSIS_LIMIT)) * 100}%` },
-                  ]}
-                />
-              </View>
-              <Text style={styles.usageProgressText}>
-                {remainingAnalyses} of {usage?.freeAnalysesLimit || FREE_ANALYSIS_LIMIT} free analyses this week
-              </Text>
-            </View>
-          )}
-        </Card>
+            <Text style={styles.usageProgressText}>
+              {weeklyAtlasUsed} of {weeklyAtlasLimit} Atlas runs used this week
+            </Text>
+          </Card>
+        )}
 
         {/* Trading Profile */}
-        {profile?.tradingStyle && (
+        {profile && (profile.tradingStyle || profile.experienceLevel) && (
           <Card style={styles.profileCard}>
-            <Text style={styles.cardTitle}>Your Trading Profile</Text>
-            <View style={styles.profileItem}>
-              <Text style={styles.profileLabel}>Trading Style</Text>
-              <Text style={styles.profileValue}>
-                {TRADING_STYLE_OPTIONS.find(o => o.value === profile.tradingStyle)?.label || profile.tradingStyle}
-              </Text>
-            </View>
+            <Text style={styles.cardTitle}>Trading Profile</Text>
+            {profile.tradingStyle && (
+              <View style={styles.profileItem}>
+                <Text style={styles.profileLabel}>Trading Style</Text>
+                <Text style={styles.profileValue}>
+                  {TRADING_STYLE_OPTIONS.find(o => o.value === profile.tradingStyle)?.label || profile.tradingStyle}
+                </Text>
+              </View>
+            )}
             {profile.experienceLevel && (
               <View style={styles.profileItem}>
                 <Text style={styles.profileLabel}>Experience Level</Text>
@@ -300,70 +520,81 @@ export default function ProfileScreen() {
         {/* Settings Section */}
         <Card style={styles.settingsCard}>
           <Text style={styles.settingsTitle}>Settings</Text>
-
-          <TouchableOpacity style={styles.settingsItem} onPress={handleEditProfile}>
-            <View style={styles.settingsItemLeft}>
-              <Ionicons name="person-outline" size={24} color={colors.neutral[600]} />
-              <Text style={styles.settingsItemText}>Edit Profile</Text>
+          
+          {/* Show hint if email not verified */}
+          {!isEmailVerified && (
+            <View style={styles.verificationHint}>
+              <Ionicons name="information-circle" size={16} color={colors.amber[600]} />
+              <Text style={styles.verificationHintText}>
+                Some features require email verification
+              </Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color={colors.neutral[400]} />
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.settingsItem} onPress={handleNotifications}>
-            <View style={styles.settingsItemLeft}>
-              <Ionicons name="notifications-outline" size={24} color={colors.neutral[600]} />
-              <Text style={styles.settingsItemText}>Notifications</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={colors.neutral[400]} />
-          </TouchableOpacity>
-
-          {/* Subscription Management - Only show for premium users */}
-          {isPremium && (
-            <TouchableOpacity style={styles.settingsItem} onPress={handleManageSubscription}>
-              <View style={styles.settingsItemLeft}>
-                <Ionicons name="card-outline" size={24} color={colors.neutral[600]} />
-                <Text style={styles.settingsItemText}>Manage Subscription</Text>
-              </View>
-              <Ionicons name="open-outline" size={20} color={colors.neutral[400]} />
-            </TouchableOpacity>
           )}
 
-          <TouchableOpacity style={styles.settingsItem} onPress={handleHelp}>
-            <View style={styles.settingsItemLeft}>
-              <Ionicons name="help-circle-outline" size={24} color={colors.neutral[600]} />
-              <Text style={styles.settingsItemText}>Help & FAQ</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={colors.neutral[400]} />
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.settingsItem} onPress={handleTerms}>
-            <View style={styles.settingsItemLeft}>
-              <Ionicons name="document-text-outline" size={24} color={colors.neutral[600]} />
-              <Text style={styles.settingsItemText}>Terms of Service</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={colors.neutral[400]} />
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.settingsItem} onPress={handlePrivacy}>
-            <View style={styles.settingsItemLeft}>
-              <Ionicons name="shield-outline" size={24} color={colors.neutral[600]} />
-              <Text style={styles.settingsItemText}>Privacy Policy</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={colors.neutral[400]} />
-          </TouchableOpacity>
+          {renderSettingItem('person-outline', 'Edit Profile', handleEditProfile, true)}
+          {renderSettingItem('lock-closed-outline', 'Change Password', handleChangePassword, true)}
+          {renderSettingItem('notifications-outline', 'Notifications', handleNotifications, true)}
+          {renderSettingItem('information-circle-outline', 'Data & Disclosures', () => router.push('/(settings)/data-disclosures'), false)}
+          {__DEV__ && Platform.OS !== 'web' && (
+            <TouchableOpacity style={styles.settingsItem} onPress={() => void pushDebugProbe()}>
+              <View style={styles.settingsItemLeft}>
+                <Ionicons name="bug-outline" size={24} color={colors.neutral[600]} />
+                <Text style={styles.settingsItemText}>Push registration probe</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={colors.neutral[400]} />
+            </TouchableOpacity>
+          )}
+          {renderSettingItem('help-circle-outline', 'Help & Support', handleHelp, false)}
+          {renderSettingItem('shield-outline', 'Privacy Policy', handlePrivacy, false)}
+          {renderSettingItem('document-text-outline', 'Terms of Service', handleTerms, false)}
         </Card>
+
+        {/* Restore Purchases (mobile only) */}
+        {Platform.OS !== 'web' && (
+          <TouchableOpacity 
+            style={styles.restoreButton} 
+            onPress={handleRestorePurchases}
+          >
+            <Text style={styles.restoreText}>Restore Purchases</Text>
+          </TouchableOpacity>
+        )}
+
+        {/* Manage Subscription (premium users only) */}
+        {isPremium && (
+          <TouchableOpacity 
+            style={styles.manageSubscriptionButton} 
+            onPress={handleManageSubscription}
+          >
+            <Text style={styles.manageSubscriptionText}>Manage Subscription</Text>
+          </TouchableOpacity>
+        )}
+
+        {/* Delete Account */}
+        <TouchableOpacity
+          style={styles.deleteAccountButton}
+          onPress={handleDeleteAccount}
+          disabled={isDeleting}
+        >
+          <View style={styles.deleteAccountInner}>
+            <Ionicons name="trash-outline" size={18} color={colors.red[500]} />
+            <Text style={styles.deleteAccountText}>Delete Account</Text>
+          </View>
+        </TouchableOpacity>
 
         {/* Sign Out Button */}
         <Button
           title="Sign Out"
           onPress={handleSignOut}
           variant="outline"
+          size="lg"
           fullWidth
           style={styles.signOutButton}
         />
 
-        {/* App Version */}
-        <Text style={styles.versionText}>ChartSignl v1.0.0</Text>
+        {/* Version */}
+        <Text style={styles.versionText}>
+          ChartSignl v{Constants.expoConfig?.version ?? '—'}
+        </Text>
           </ScrollView>
         </View>
       </View>
@@ -376,36 +607,86 @@ const WEB_MAX_WIDTH = 900;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    minHeight: 0,
+    overflow: 'hidden',
     backgroundColor: colors.background,
   },
   webWrapper: {
     flex: 1,
-    ...(Platform.OS === 'web' && { alignItems: 'center' }),
+    ...(Platform.OS === 'web' && { width: '100%', alignItems: 'center' }),
   },
   webInner: {
     flex: 1,
     width: '100%',
-    ...(Platform.OS === 'web' && { maxWidth: WEB_MAX_WIDTH }),
+    ...(Platform.OS === 'web' && {
+      maxWidth: WEB_MAX_WIDTH,
+      minHeight: 0,
+    }),
+  },
+  guestWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xl,
+    paddingBottom: spacing.xxl,
+  },
+  guestTitle: {
+    ...typography.headingLg,
+    color: colors.neutral[900],
+    marginTop: spacing.lg,
+    marginBottom: spacing.sm,
+    textAlign: 'center',
+  },
+  guestSubtitle: {
+    ...typography.bodyMd,
+    color: colors.neutral[500],
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: spacing.lg,
+    maxWidth: 360,
+  },
+  guestButton: {
+    width: '100%',
+    maxWidth: 360,
   },
   scrollView: {
     flex: 1,
+    minHeight: 0,
   },
   scrollContent: {
     paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
     paddingBottom: spacing.xxl,
+  },
+  pushBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    backgroundColor: colors.amber[50],
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.amber[200],
+    padding: spacing.md,
+    marginBottom: spacing.md,
+  },
+  pushBannerText: {
+    ...typography.bodySm,
+    color: colors.neutral[800],
+    flex: 1,
+    lineHeight: 20,
   },
   // Header
   header: {
     alignItems: 'center',
-    paddingVertical: spacing.xl,
+    marginBottom: spacing.xl,
   },
   avatar: {
     width: 80,
     height: 80,
     borderRadius: 40,
     backgroundColor: colors.primary[100],
-    alignItems: 'center',
     justifyContent: 'center',
+    alignItems: 'center',
     marginBottom: spacing.md,
   },
   avatarText: {
@@ -421,135 +702,110 @@ const styles = StyleSheet.create({
     ...typography.bodyMd,
     color: colors.neutral[500],
   },
+  unverifiedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    backgroundColor: colors.amber[50],
+    borderRadius: borderRadius.full,
+    gap: 4,
+  },
+  unverifiedText: {
+    ...typography.bodySm,
+    color: colors.amber[700],
+    fontWeight: '500',
+  },
   // Upgrade Card
   upgradeCard: {
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
     backgroundColor: colors.primary[50],
+    borderColor: colors.primary[200],
+    borderWidth: 1,
   },
   upgradeContent: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: spacing.md,
   },
-  upgradeIconContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+  upgradeIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: borderRadius.lg,
     backgroundColor: colors.primary[100],
-    alignItems: 'center',
     justifyContent: 'center',
+    alignItems: 'center',
     marginRight: spacing.md,
+  },
+  upgradeIconText: {
+    fontSize: 24,
   },
   upgradeTextContainer: {
     flex: 1,
   },
   upgradeTitle: {
     ...typography.headingMd,
-    color: colors.neutral[900],
-    marginBottom: spacing.xs,
+    color: colors.primary[900],
+    marginBottom: spacing.xxs,
   },
-  upgradeDescription: {
+  upgradeSubtitle: {
     ...typography.bodySm,
-    color: colors.neutral[600],
+    color: colors.primary[700],
   },
   upgradeButton: {
-    marginTop: spacing.sm,
+    alignSelf: 'flex-start',
   },
-  // Premium Active Card
-  premiumActiveCard: {
-    marginBottom: spacing.lg,
-    backgroundColor: colors.primary[50],
+  // Premium Card
+  premiumCard: {
+    marginBottom: spacing.md,
+    backgroundColor: colors.amber[50],
+    borderColor: colors.amber[200],
     borderWidth: 1,
-    borderColor: colors.primary[200],
-  },
-  premiumActiveContent: {
-    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.sm,
+    paddingVertical: spacing.lg,
   },
   premiumBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.primary[100],
-    paddingHorizontal: spacing.sm,
+    backgroundColor: colors.amber[100],
+    paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
     borderRadius: borderRadius.full,
+    marginBottom: spacing.sm,
   },
   premiumBadgeText: {
     ...typography.labelMd,
-    color: colors.primary[700],
+    color: colors.amber[800],
     marginLeft: spacing.xs,
   },
-  premiumPriceText: {
-    ...typography.headingSm,
-    color: colors.primary[600],
-  },
-  premiumActiveText: {
+  premiumDescription: {
     ...typography.bodyMd,
-    color: colors.neutral[600],
-    marginBottom: spacing.md,
+    color: colors.amber[800],
+    marginBottom: spacing.sm,
   },
-  manageSubscriptionLink: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: colors.primary[200],
+  manageLink: {
+    ...typography.bodySm,
+    color: colors.primary[600],
+    textDecorationLine: 'underline',
   },
-  manageSubscriptionText: {
-    ...typography.labelMd,
-    color: colors.primary[500],
-    marginRight: spacing.xs,
-  },
-  // Usage card
   // Usage Card
   usageCard: {
-    marginBottom: spacing.lg,
-  },
-  usageHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
     marginBottom: spacing.md,
+    alignItems: 'center',
   },
   usageTitle: {
-    ...typography.headingMd,
-    color: colors.neutral[900],
-  },
-  upgradeLink: {
     ...typography.labelMd,
-    color: colors.primary[500],
-  },
-  usageStats: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing.md,
-  },
-  usageStat: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  usageNumber: {
-    ...typography.displaySm,
-    color: colors.primary[600],
+    color: colors.neutral[600],
     marginBottom: spacing.xs,
   },
-  usageLabel: {
-    ...typography.bodySm,
-    color: colors.neutral[500],
-  },
-  usageDivider: {
-    width: 1,
-    height: 40,
-    backgroundColor: colors.neutral[200],
-    marginHorizontal: spacing.md,
-  },
-  usageProgress: {
-    marginTop: spacing.sm,
+  usageCount: {
+    ...typography.headingMd,
+    color: colors.neutral[900],
+    marginBottom: spacing.sm,
   },
   usageProgressBar: {
+    width: '100%',
     height: 8,
     backgroundColor: colors.neutral[200],
     borderRadius: borderRadius.full,
@@ -601,6 +857,21 @@ const styles = StyleSheet.create({
     color: colors.neutral[900],
     marginBottom: spacing.md,
   },
+  verificationHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.amber[50],
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.md,
+    marginBottom: spacing.md,
+    gap: 8,
+  },
+  verificationHintText: {
+    ...typography.bodySm,
+    color: colors.amber[700],
+    flex: 1,
+  },
   settingsItem: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -608,6 +879,9 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: colors.neutral[100],
+  },
+  settingsItemDisabled: {
+    opacity: 0.7,
   },
   settingsItemLeft: {
     flexDirection: 'row',
@@ -618,8 +892,50 @@ const styles = StyleSheet.create({
     color: colors.neutral[700],
     marginLeft: spacing.md,
   },
+  settingsItemTextDisabled: {
+    color: colors.neutral[400],
+  },
+  verificationBadge: {
+    marginLeft: spacing.sm,
+    padding: 2,
+    backgroundColor: colors.amber[100],
+    borderRadius: borderRadius.full,
+  },
+  restoreButton: {
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  restoreText: {
+    ...typography.bodySm,
+    color: colors.primary[600],
+    textDecorationLine: 'underline',
+  },
+  manageSubscriptionButton: {
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  manageSubscriptionText: {
+    ...typography.bodySm,
+    color: colors.neutral[500],
+    textDecorationLine: 'underline',
+  },
+  deleteAccountButton: {
+    alignItems: 'center',
+    marginBottom: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  deleteAccountInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  deleteAccountText: {
+    ...typography.bodySm,
+    color: colors.red[500],
+  },
   signOutButton: {
     marginBottom: spacing.lg,
+    backgroundColor: colors.white,
   },
   versionText: {
     ...typography.bodySm,

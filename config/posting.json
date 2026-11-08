@@ -1,0 +1,8 @@
+{
+  "mode": "confirm",
+  "autoFrom": "2026-10-07",
+  "timezone": "America/New_York",
+  "shareToFeed": true,
+  "coverIsHookFrame": true,
+  "notes": "Claude creates the reel and caption. ChartSignl posts Instagram only when asked. confirm: do not publish. auto: publish on render success. Flips on autoFrom (ET date)."
+}

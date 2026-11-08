@@ -5,11 +5,52 @@
   "main": "./src/index.js",
   "types": "./src/index.ts",
   "exports": {
-    ".": "./src/index.js",
+    ".": {
+      "types": "./src/index.ts",
+      "react-native": "./src/index.ts",
+      "browser": "./src/index.ts",
+      "default": "./src/index.js"
+    },
+    "./content/indicatorEducation": {
+      "types": "./src/content/indicatorEducation.ts",
+      "react-native": "./src/content/indicatorEducation.ts",
+      "browser": "./src/content/indicatorEducation.ts",
+      "default": "./src/content/indicatorEducation.ts"
+    },
+    "./lib/trackRecord": {
+      "types": "./src/lib/trackRecord.ts",
+      "react-native": "./src/lib/trackRecord.ts",
+      "browser": "./src/lib/trackRecord.ts",
+      "node": "./dist/lib/trackRecord.js",
+      "default": "./src/lib/trackRecord.ts"
+    },
+    "./lib/predictionCard": {
+      "types": "./src/lib/predictionCard.ts",
+      "react-native": "./src/lib/predictionCard.ts",
+      "browser": "./src/lib/predictionCard.ts",
+      "node": "./dist/lib/predictionCard.js",
+      "default": "./src/lib/predictionCard.ts"
+    },
+    "./lib/dailyHighlight": {
+      "types": "./src/lib/dailyHighlight.ts",
+      "react-native": "./src/lib/dailyHighlight.ts",
+      "browser": "./src/lib/dailyHighlight.ts",
+      "node": "./dist/lib/dailyHighlight.js",
+      "default": "./src/lib/dailyHighlight.ts"
+    },
+    "./lib/predictionChart": {
+      "types": "./src/lib/predictionChart.ts",
+      "react-native": "./src/lib/predictionChart.ts",
+      "browser": "./src/lib/predictionChart.ts",
+      "node": "./dist/lib/predictionChart.js",
+      "default": "./src/lib/predictionChart.ts"
+    },
     "./types/*": "./src/types/*.ts"
   },
   "scripts": {
+    "build": "tsc",
     "type-check": "tsc --noEmit",
+    "test:freshness": "npx tsx src/types/__tests__/dataFreshness.test.ts",
     "clean": "rm -rf dist"
   },
   "devDependencies": {

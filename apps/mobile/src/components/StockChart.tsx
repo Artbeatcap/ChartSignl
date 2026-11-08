@@ -1,20 +1,24 @@
-import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, Platform, Dimensions } from 'react-native';
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  ReferenceLine,
-} from 'recharts';
+import React, { useMemo, useState } from 'react';
+import { View, Text, StyleSheet } from 'react-native';
 import Svg, { Rect, Line as SvgLine, G, Path } from 'react-native-svg';
-import type { MarketDataPoint, AILevel, ChartViewType, ChartInterval } from '@chartsignl/core';
+import type {
+  MarketDataPoint,
+  AILevel,
+  ChartViewType,
+  ChartInterval,
+  ProjectedPoint,
+  VolumeProfile as VolumeProfileData,
+} from '@chartsignl/core';
 import { CHART_COLORS } from '@chartsignl/core';
+import {
+  getPredictionLayout,
+  getPriceDomainWithPrediction,
+  buildPredictionBandPath,
+  buildPredictionLinePath,
+} from '@chartsignl/core/lib/predictionChart';
 import { formatPrice, formatVolume } from '../lib/marketData';
 import { colors, typography, spacing, borderRadius } from '../theme';
+import { VolumeBars, VolumeProfile } from './chart';
 
 interface StockChartProps {
   data: MarketDataPoint[];
@@ -22,10 +26,16 @@ interface StockChartProps {
   interval: ChartInterval;
   viewType: ChartViewType;
   showEMA?: boolean;
+  /** Time volume underlay. Default false — opt-in via layer store. */
   showVolume?: boolean;
+  showVolumeProfile?: boolean;
+  volumeProfile?: Pick<VolumeProfileData, 'highVolumeNodes' | 'pointOfControl'> | null;
   supportLevels?: AILevel[];
   resistanceLevels?: AILevel[];
   height?: number;
+  projectedPath?: ProjectedPoint[];
+  expectedChangePct?: number;
+  showPrediction?: boolean;
 }
 
 // Improved date formatting functions
@@ -105,6 +115,13 @@ function formatTooltipDate(timestamp: number, interval: ChartInterval): string {
   });
 }
 
+// Short format for Y-axis price labels (avoids clipping)
+function formatAxisPrice(price: number): string {
+  if (price >= 100) return `$${Math.round(price)}`;
+  if (price >= 10) return `$${price.toFixed(1)}`;
+  return `$${price.toFixed(2)}`;
+}
+
 // Smart formatter for 5D that shows dates at day changes and times in between
 function format5DLabel(timestamp: number, data: MarketDataPoint[], tickIndex: number, allTicks: number[]): string {
   const currentDate = new Date(timestamp);
@@ -140,16 +157,100 @@ function format5DLabel(timestamp: number, data: MarketDataPoint[], tickIndex: nu
   }
 }
 
-function getTickCount(interval: ChartInterval, dataLength: number): number {
-  if (interval === '1d') return Math.min(6, dataLength);
-  if (interval === '5d') return Math.min(10, dataLength); // Increased to show more date+time combinations
-  if (interval === '1mo') return Math.min(10, dataLength); // ~3 per week
-  if (interval === '3mo') return Math.min(10, dataLength); // Increased from 6
-  if (interval === '6mo') return Math.min(10, dataLength); // Increased from 6
-  if (interval === '1y') return Math.min(12, dataLength); // Increased from 6
-  if (interval === '2y') return Math.min(10, dataLength);
-  if (interval === '5y') return Math.min(10, dataLength);
-  return 8;
+// Compact date format for x-axis labels (readable on small screens)
+function formatCompactDate(timestamp: number, interval: ChartInterval): string {
+  const d = new Date(timestamp);
+  if (interval === '1d') {
+    const h = d.getHours();
+    const m = d.getMinutes().toString().padStart(2, '0');
+    const ampm = h >= 12 ? 'p' : 'a';
+    const hour = h % 12 || 12;
+    return `${hour}:${m}${ampm}`;
+  }
+  if (interval === '5d') {
+    return `${d.getMonth() + 1}/${d.getDate()}`;
+  }
+  if (interval === '1mo' || interval === '3mo' || interval === '6mo') {
+    return `${d.getMonth() + 1}/${d.getDate()}`;
+  }
+  if (interval === '1y') {
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  }
+  // 2y, 5y
+  return d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+}
+
+// Compact 5D: dates as "1/15", times as "9:30a"
+function formatCompact5DLabel(timestamp: number, data: MarketDataPoint[], tickIndex: number, allTicks: number[]): string {
+  const currentDate = new Date(timestamp);
+  const currentDay = currentDate.toDateString();
+
+  if (tickIndex === 0) {
+    return `${currentDate.getMonth() + 1}/${currentDate.getDate()}`;
+  }
+
+  const prevTickTimestamp = allTicks[tickIndex - 1];
+  const prevDate = new Date(prevTickTimestamp);
+  const prevDay = prevDate.toDateString();
+
+  if (currentDay !== prevDay) {
+    return `${currentDate.getMonth() + 1}/${currentDate.getDate()}`;
+  }
+  const h = currentDate.getHours();
+  const m = currentDate.getMinutes().toString().padStart(2, '0');
+  const ampm = h >= 12 ? 'p' : 'a';
+  const hour = h % 12 || 12;
+  return `${hour}:${m}${ampm}`;
+}
+
+function getTickCount(dataLength: number, chartWidth: number): number {
+  const maxTicks = chartWidth < 520 ? 4 : 6;
+  return Math.min(maxTicks, dataLength);
+}
+
+const X_AXIS_LABEL_MIN = 44;
+
+function xAxisLabelWidth(chartWidth: number): number {
+  return Math.min(64, Math.max(X_AXIS_LABEL_MIN, Math.floor(chartWidth / 7)));
+}
+
+/** Keep a horizontal label centered on its tick and inside the chart. */
+function xAxisLabelLeft(tickX: number, labelWidth: number, chartWidth: number): number {
+  const maxLeft = Math.max(0, chartWidth - labelWidth);
+  return Math.max(0, Math.min(tickX - labelWidth / 2, maxLeft));
+}
+
+function ChartXLabels({
+  width,
+  indices,
+  xForIndex,
+  labelFor,
+}: {
+  width: number;
+  indices: number[];
+  xForIndex: (index: number) => number;
+  labelFor: (index: number, tickIdx: number) => string;
+}) {
+  const labelWidth = xAxisLabelWidth(width);
+  return (
+    <View style={[styles.xAxis, { width }]} pointerEvents="none">
+      {indices.map((index, tickIdx) => (
+        <Text
+          key={index}
+          style={[
+            styles.xAxisLabel,
+            {
+              position: 'absolute',
+              left: xAxisLabelLeft(xForIndex(index), labelWidth, width),
+              width: labelWidth,
+            },
+          ]}
+        >
+          {labelFor(index, tickIdx)}
+        </Text>
+      ))}
+    </View>
+  );
 }
 
 function getXAxisTicks(data: MarketDataPoint[], tickCount: number): number[] {
@@ -204,10 +305,15 @@ export function StockChart({
   interval,
   viewType,
   showEMA = true,
-  showVolume = true,
+  showVolume = false,
+  showVolumeProfile = false,
+  volumeProfile = null,
   supportLevels = [],
   resistanceLevels = [],
   height = 300,
+  projectedPath = [],
+  expectedChangePct,
+  showPrediction = false,
 }: StockChartProps) {
   // Calculate domain for Y axis
   const { minPrice, maxPrice } = useMemo(() => {
@@ -215,6 +321,14 @@ export function StockChart({
 
     const allPrices = data.flatMap((d) => [d.high, d.low]);
     const levelPrices = [...supportLevels, ...resistanceLevels].map((l) => l.price);
+
+    if (showPrediction && projectedPath.length > 0) {
+      return getPriceDomainWithPrediction(
+        [...allPrices, ...levelPrices],
+        projectedPath
+      );
+    }
+
     const allValues = [...allPrices, ...levelPrices];
 
     const min = Math.min(...allValues);
@@ -225,11 +339,11 @@ export function StockChart({
       minPrice: min - padding,
       maxPrice: max + padding,
     };
-  }, [data, supportLevels, resistanceLevels]);
+  }, [data, supportLevels, resistanceLevels, showPrediction, projectedPath]);
 
   // Determine axis type and ticks
   const useCategorical = shouldUseCategoricalAxis(interval);
-  const tickCount = getTickCount(interval, data.length);
+  const tickCount = getTickCount(data.length, 480);
   
   const xAxisConfig = useMemo(() => {
     if (useCategorical) {
@@ -318,138 +432,44 @@ export function StockChart({
     );
   };
 
-  // Render candlestick chart (works on both native and web via react-native-svg)
-  if (viewType === 'candle') {
-    return (
-      <View style={[styles.container, { height }]}>
-        <SimpleCandlestickChart
-          data={data}
-          interval={interval}
-          minPrice={minPrice}
-          maxPrice={maxPrice}
-          height={height - 40}
-          showEMA={showEMA}
-          supportLevels={supportLevels}
-          resistanceLevels={resistanceLevels}
-        />
-        <View style={styles.legend}>
-          <LegendItem color={CHART_COLORS.candleUp} label="Up" />
-          <LegendItem color={CHART_COLORS.candleDown} label="Down" />
-          {showEMA && (
-            <>
-              <LegendItem color={CHART_COLORS.ema9} label="EMA 9" />
-              <LegendItem color={CHART_COLORS.ema21} label="EMA 21" />
-            </>
-          )}
-          {supportLevels.length > 0 && <LegendItem color={CHART_COLORS.support} label="Support" />}
-          {resistanceLevels.length > 0 && (
-            <LegendItem color={CHART_COLORS.resistance} label="Resistance" />
-          )}
-        </View>
+  const plotHeight = height - 85;
+  const sharedPlot = {
+    data,
+    interval,
+    minPrice,
+    maxPrice,
+    height: plotHeight,
+    showEMA,
+    showVolume,
+    showVolumeProfile,
+    volumeProfile,
+    supportLevels,
+    resistanceLevels,
+    projectedPath,
+    expectedChangePct,
+    showPrediction,
+  };
+
+  const legend =
+    viewType === 'candle' ? (
+      <View style={styles.legend}>
+        <LegendItem color={CHART_COLORS.candleUp} label="Bullish" />
+        <LegendItem color={CHART_COLORS.candleDown} label="Bearish" />
+        {showEMA && (
+          <>
+            <LegendItem color={CHART_COLORS.ema9} label="EMA 9" />
+            <LegendItem color={CHART_COLORS.ema21} label="EMA 21" />
+          </>
+        )}
+        {supportLevels.length > 0 && <LegendItem color={CHART_COLORS.support} label="Support" />}
+        {resistanceLevels.length > 0 && (
+          <LegendItem color={CHART_COLORS.resistance} label="Resistance" />
+        )}
+        {showPrediction && projectedPath.length > 0 && (
+          <LegendItem color={CHART_COLORS.prediction} label="Atlas forecast" />
+        )}
       </View>
-    );
-  }
-
-  // Line chart with Recharts
-  return (
-    <View style={[styles.container, { height }]}>
-      <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} vertical={false} />
-
-          <XAxis
-            dataKey={xAxisConfig.dataKey}
-            type={xAxisConfig.type}
-            domain={xAxisConfig.type === 'number' ? ['dataMin', 'dataMax'] : undefined}
-            ticks={xAxisConfig.ticks}
-            tickFormatter={xAxisConfig.tickFormatter}
-            stroke={CHART_COLORS.axis}
-            tick={{ fontSize: 11, fill: CHART_COLORS.text }}
-            tickLine={false}
-            axisLine={{ stroke: CHART_COLORS.grid }}
-            interval={0}
-            angle={interval === '1mo' ? -45 : 0}
-            textAnchor={interval === '1mo' ? 'end' : 'middle'}
-            height={interval === '1mo' ? 60 : 30}
-          />
-
-          <YAxis
-            domain={[minPrice, maxPrice]}
-            tickFormatter={(v) => formatPrice(v)}
-            stroke={CHART_COLORS.axis}
-            tick={{ fontSize: 11, fill: CHART_COLORS.text }}
-            tickLine={false}
-            axisLine={false}
-            orientation="right"
-            width={60}
-          />
-
-          <Tooltip content={<CustomTooltip />} />
-
-          {/* Support levels */}
-          {supportLevels.map((level) => (
-            <ReferenceLine
-              key={level.id}
-              y={level.price}
-              stroke={CHART_COLORS.support}
-              strokeDasharray={level.strength === 'strong' ? '0' : '5 5'}
-              strokeWidth={level.strength === 'strong' ? 2 : 1.5}
-              strokeOpacity={level.strength === 'weak' ? 0.6 : 1}
-            />
-          ))}
-
-          {/* Resistance levels */}
-          {resistanceLevels.map((level) => (
-            <ReferenceLine
-              key={level.id}
-              y={level.price}
-              stroke={CHART_COLORS.resistance}
-              strokeDasharray={level.strength === 'strong' ? '0' : '5 5'}
-              strokeWidth={level.strength === 'strong' ? 2 : 1.5}
-              strokeOpacity={level.strength === 'weak' ? 0.6 : 1}
-            />
-          ))}
-
-          {/* EMAs */}
-          {showEMA && (
-            <>
-              <Line
-                type="monotone"
-                dataKey="ema9"
-                stroke={CHART_COLORS.ema9}
-                strokeWidth={1.5}
-                dot={false}
-                connectNulls
-              />
-              <Line
-                type="monotone"
-                dataKey="ema21"
-                stroke={CHART_COLORS.ema21}
-                strokeWidth={1.5}
-                dot={false}
-                connectNulls
-              />
-            </>
-          )}
-
-          {/* Main price line */}
-          <Line
-            type="monotone"
-            dataKey="close"
-            stroke={CHART_COLORS.lineStroke}
-            strokeWidth={2.5}
-            dot={false}
-            activeDot={{
-              r: 6,
-              fill: CHART_COLORS.lineStroke,
-              stroke: '#fff',
-              strokeWidth: 2,
-            }}
-          />
-        </LineChart>
-      </ResponsiveContainer>
-
-      {/* Legend */}
+    ) : (
       <View style={styles.legend}>
         <LegendItem color={CHART_COLORS.lineStroke} label="Price" />
         {showEMA && (
@@ -462,13 +482,48 @@ export function StockChart({
         {resistanceLevels.length > 0 && (
           <LegendItem color={CHART_COLORS.resistance} label="Resistance" />
         )}
-        {viewType === 'candle' && (
-          <>
-            <LegendItem color={CHART_COLORS.candleUp} label="Up" />
-            <LegendItem color={CHART_COLORS.candleDown} label="Down" />
-          </>
+        {showPrediction && projectedPath.length > 0 && (
+          <LegendItem color={CHART_COLORS.prediction} label="Atlas forecast" />
         )}
       </View>
+    );
+
+  return (
+    <ChartFrame height={height} legend={legend}>
+      {(plotWidth) =>
+        viewType === 'candle' ? (
+          <SimpleCandlestickChart {...sharedPlot} width={plotWidth} />
+        ) : (
+          <SimpleLineChart {...sharedPlot} width={plotWidth} />
+        )
+      }
+    </ChartFrame>
+  );
+}
+
+function ChartFrame({
+  height,
+  legend,
+  children,
+}: {
+  height: number;
+  legend: React.ReactNode;
+  children: (plotWidth: number) => React.ReactNode;
+}) {
+  const [plotWidth, setPlotWidth] = useState(0);
+
+  return (
+    <View style={[styles.container, { height }]}>
+      <View
+        style={styles.plotSlot}
+        onLayout={(event) => {
+          const next = Math.floor(event.nativeEvent.layout.width);
+          setPlotWidth((current) => (current === next ? current : next));
+        }}
+      >
+        {plotWidth > 0 ? children(plotWidth) : null}
+      </View>
+      {legend}
     </View>
   );
 }
@@ -479,10 +534,17 @@ interface SimpleCandlestickChartProps {
   interval: ChartInterval;
   minPrice: number;
   maxPrice: number;
+  width: number;
   height: number;
   showEMA?: boolean;
+  showVolume?: boolean;
+  showVolumeProfile?: boolean;
+  volumeProfile?: Pick<VolumeProfileData, 'highVolumeNodes' | 'pointOfControl'> | null;
   supportLevels?: AILevel[];
   resistanceLevels?: AILevel[];
+  projectedPath?: ProjectedPoint[];
+  expectedChangePct?: number;
+  showPrediction?: boolean;
 }
 
 function SimpleCandlestickChart({
@@ -490,25 +552,43 @@ function SimpleCandlestickChart({
   interval,
   minPrice,
   maxPrice,
+  width,
   height,
   showEMA = true,
+  showVolume = false,
+  showVolumeProfile = false,
+  volumeProfile = null,
   supportLevels = [],
   resistanceLevels = [],
+  projectedPath = [],
+  expectedChangePct,
+  showPrediction = false,
 }: SimpleCandlestickChartProps) {
-  const width = Dimensions.get('window').width - 40;
-  const chartHeight = height - 60;
-  const candleWidth = Math.max(2, Math.min(12, (width - 60) / data.length));
-  const candleSpacing = candleWidth * 0.3;
+  const svgHeight = height - X_AXIS_HEIGHT;
+  const chartHeight = svgHeight - 10;
+
+  // Right edge of drawn content (leave CHART_RIGHT_MARGIN for Y-axis labels)
+  const rightEdge = width - CHART_RIGHT_MARGIN;
+  const chartDrawableWidth = width - CHART_LEFT_MARGIN - CHART_RIGHT_MARGIN;
+  // When a forecast is shown, candles only occupy the historical zone so the
+  // prediction cone has dedicated room on the right (mirrors the line chart).
+  const hasPrediction = showPrediction && projectedPath.length > 0;
+  const predictionLayout = getPredictionLayout(CHART_LEFT_MARGIN, chartDrawableWidth);
+  const candleZoneWidth = hasPrediction ? predictionLayout.historicalWidth : chartDrawableWidth;
+  const targetWidth = candleZoneWidth * 0.95; // Use 95% of available space
+  const candleAndSpacingWidth = targetWidth / Math.max(1, data.length);
+  const candleWidth = Math.max(2, Math.min(12, candleAndSpacingWidth * 0.75)); // 75% bar, 25% space
+  const candleSpacing = candleAndSpacingWidth - candleWidth;
 
   // Helper to convert price to Y coordinate
   const priceToY = (price: number) => {
     const range = maxPrice - minPrice;
-    const ratio = (maxPrice - price) / range;
+    const ratio = range > 0 ? (maxPrice - price) / range : 0;
     return ratio * chartHeight + 10;
   };
 
   // Calculate which labels to show on x-axis
-  const tickCount = getTickCount(interval, data.length);
+  const tickCount = getTickCount(data.length, width);
   const xAxisIndices = useMemo(() => {
     if (data.length === 0) return [];
     if (data.length <= tickCount) return data.map((_, i) => i);
@@ -524,145 +604,91 @@ function SimpleCandlestickChart({
     return indices;
   }, [data.length, tickCount]);
 
-  const shouldRotateLabels = interval === '1mo';
+  const xForIndex = (index: number) =>
+    CHART_LEFT_MARGIN + index * (candleWidth + candleSpacing) + candleWidth / 2;
 
   return (
-    <View style={{ width, height }}>
-      {/* Y-axis labels */}
+    <View style={{ width, height, overflow: 'visible' }}>
+      {/* Y-axis labels (left side for candlestick) */}
       <View style={styles.yAxisLabels}>
-        <Text style={styles.axisLabel}>${formatPrice(maxPrice)}</Text>
-        <Text style={styles.axisLabel}>${formatPrice((maxPrice + minPrice) / 2)}</Text>
-        <Text style={styles.axisLabel}>${formatPrice(minPrice)}</Text>
+        <Text style={styles.axisLabel}>{formatAxisPrice(maxPrice)}</Text>
+        <Text style={styles.axisLabel}>{formatAxisPrice((maxPrice + minPrice) / 2)}</Text>
+        <Text style={styles.axisLabel}>{formatAxisPrice(minPrice)}</Text>
       </View>
 
-      <Svg width={width} height={height}>
-        {/* Grid lines */}
+      <Svg width={width} height={svgHeight}>
+        {/* 1 — volume underlay (furthest back) */}
+        {showVolume ? (
+          <VolumeBars
+            data={data}
+            chartHeight={chartHeight + 10}
+            xForIndex={xForIndex}
+          />
+        ) : null}
+
+        {/* 2 — volume profile (right edge) */}
+        {showVolumeProfile && volumeProfile?.highVolumeNodes?.length ? (
+          <VolumeProfile
+            nodes={volumeProfile.highVolumeNodes}
+            pointOfControl={volumeProfile.pointOfControl}
+            priceToY={priceToY}
+            rightEdge={rightEdge}
+            leftEdge={CHART_LEFT_MARGIN}
+            highlightedPrices={[
+              ...supportLevels.map((l) => ({ price: l.price, role: 'support' as const })),
+              ...resistanceLevels.map((l) => ({ price: l.price, role: 'resistance' as const })),
+            ]}
+          />
+        ) : null}
+
+        {/* 3 — grid */}
         <SvgLine
-          x1={50}
+          x1={CHART_LEFT_MARGIN}
           y1={priceToY(maxPrice)}
-          x2={width - 10}
+          x2={rightEdge}
           y2={priceToY(maxPrice)}
           stroke={CHART_COLORS.grid}
           strokeWidth="1"
           strokeDasharray="3,3"
         />
         <SvgLine
-          x1={50}
+          x1={CHART_LEFT_MARGIN}
           y1={priceToY((maxPrice + minPrice) / 2)}
-          x2={width - 10}
+          x2={rightEdge}
           y2={priceToY((maxPrice + minPrice) / 2)}
           stroke={CHART_COLORS.grid}
           strokeWidth="1"
           strokeDasharray="3,3"
         />
         <SvgLine
-          x1={50}
+          x1={CHART_LEFT_MARGIN}
           y1={priceToY(minPrice)}
-          x2={width - 10}
+          x2={rightEdge}
           y2={priceToY(minPrice)}
           stroke={CHART_COLORS.grid}
           strokeWidth="1"
           strokeDasharray="3,3"
         />
 
-        {/* Support levels */}
-        {supportLevels.map((level) => {
-          const y = priceToY(level.price);
+        {/* X-axis tick marks */}
+        {xAxisIndices.map((index) => {
+          const xPosition = xForIndex(index);
           return (
             <SvgLine
-              key={`support-${level.id}`}
-              x1={50}
-              y1={y}
-              x2={width - 10}
-              y2={y}
-              stroke={CHART_COLORS.support}
-              strokeWidth={level.strength === 'strong' ? 2 : 1.5}
-              strokeDasharray={level.strength === 'strong' ? '0' : '5,5'}
-              strokeOpacity={level.strength === 'weak' ? 0.6 : 1}
+              key={`tick-${index}`}
+              x1={xPosition}
+              y1={chartHeight + 10}
+              x2={xPosition}
+              y2={chartHeight + 14}
+              stroke={CHART_COLORS.grid}
+              strokeWidth="1"
             />
           );
         })}
 
-        {/* Resistance levels */}
-        {resistanceLevels.map((level) => {
-          const y = priceToY(level.price);
-          return (
-            <SvgLine
-              key={`resistance-${level.id}`}
-              x1={50}
-              y1={y}
-              x2={width - 10}
-              y2={y}
-              stroke={CHART_COLORS.resistance}
-              strokeWidth={level.strength === 'strong' ? 2 : 1.5}
-              strokeDasharray={level.strength === 'strong' ? '0' : '5,5'}
-              strokeOpacity={level.strength === 'weak' ? 0.6 : 1}
-            />
-          );
-        })}
-
-        {/* EMA lines */}
-        {showEMA && (
-          <>
-            {/* EMA 9 */}
-            {(() => {
-              const pathParts: string[] = [];
-              let isFirstPoint = true;
-              
-              data.forEach((point, index) => {
-                if (point.ema9 !== undefined && point.ema9 !== null) {
-                  const x = 50 + index * (candleWidth + candleSpacing) + candleWidth / 2;
-                  const y = priceToY(point.ema9);
-                  pathParts.push(`${isFirstPoint ? 'M' : 'L'} ${x} ${y}`);
-                  isFirstPoint = false;
-                }
-              });
-              
-              if (pathParts.length > 0) {
-                return (
-                  <Path
-                    d={pathParts.join(' ')}
-                    stroke={CHART_COLORS.ema9}
-                    strokeWidth="1.5"
-                    fill="none"
-                  />
-                );
-              }
-              return null;
-            })()}
-
-            {/* EMA 21 */}
-            {(() => {
-              const pathParts: string[] = [];
-              let isFirstPoint = true;
-              
-              data.forEach((point, index) => {
-                if (point.ema21 !== undefined && point.ema21 !== null) {
-                  const x = 50 + index * (candleWidth + candleSpacing) + candleWidth / 2;
-                  const y = priceToY(point.ema21);
-                  pathParts.push(`${isFirstPoint ? 'M' : 'L'} ${x} ${y}`);
-                  isFirstPoint = false;
-                }
-              });
-              
-              if (pathParts.length > 0) {
-                return (
-                  <Path
-                    d={pathParts.join(' ')}
-                    stroke={CHART_COLORS.ema21}
-                    strokeWidth="1.5"
-                    fill="none"
-                  />
-                );
-              }
-              return null;
-            })()}
-          </>
-        )}
-
-        {/* Candlesticks */}
+        {/* 4 — candlesticks */}
         {data.map((candle, index) => {
-          const x = 50 + index * (candleWidth + candleSpacing) + candleWidth / 2;
+          const x = CHART_LEFT_MARGIN + index * (candleWidth + candleSpacing) + candleWidth / 2;
           const isUp = candle.close >= candle.open;
           const color = isUp ? CHART_COLORS.candleUp : CHART_COLORS.candleDown;
 
@@ -677,7 +703,6 @@ function SimpleCandlestickChart({
 
           return (
             <G key={index}>
-              {/* Wick (high to low) */}
               <SvgLine
                 x1={x}
                 y1={highY}
@@ -686,13 +711,12 @@ function SimpleCandlestickChart({
                 stroke={color}
                 strokeWidth="1.5"
               />
-              {/* Body (open to close) */}
               <Rect
                 x={x - candleWidth / 2}
                 y={bodyTop}
                 width={candleWidth}
                 height={bodyHeight}
-                fill={isUp ? color : color}
+                fill={color}
                 fillOpacity={isUp ? 0.8 : 1}
                 stroke={color}
                 strokeWidth="1"
@@ -700,36 +724,432 @@ function SimpleCandlestickChart({
             </G>
           );
         })}
-      </Svg>
 
-      {/* X-axis with smart label positioning */}
-      <View style={[styles.xAxis, shouldRotateLabels && styles.xAxisRotated]}>
-        {xAxisIndices.map((index, tickIdx) => {
-          const position = (index / (data.length - 1)) * 100;
-          
-          // For 5D, use smart formatter
-          let label;
-          if (interval === '5d') {
-            const tickTimestamps = xAxisIndices.map(i => data[i]?.timestamp).filter(Boolean);
-            label = format5DLabel(data[index]?.timestamp, data, tickIdx, tickTimestamps);
-          } else {
-            label = formatChartDate(data[index]?.timestamp, interval, index);
-          }
-          
+        {/* 5 — EMA lines */}
+        {showEMA && (
+          <>
+            {(() => {
+              const pathParts: string[] = [];
+              let isFirstPoint = true;
+
+              data.forEach((point, index) => {
+                if (point.ema9 !== undefined && point.ema9 !== null) {
+                  const x = CHART_LEFT_MARGIN + index * (candleWidth + candleSpacing) + candleWidth / 2;
+                  const y = priceToY(point.ema9);
+                  pathParts.push(`${isFirstPoint ? 'M' : 'L'} ${x} ${y}`);
+                  isFirstPoint = false;
+                }
+              });
+
+              if (pathParts.length > 0) {
+                return (
+                  <Path
+                    d={pathParts.join(' ')}
+                    stroke={CHART_COLORS.ema9}
+                    strokeWidth="1.5"
+                    fill="none"
+                    opacity="0.5"
+                  />
+                );
+              }
+              return null;
+            })()}
+
+            {(() => {
+              const pathParts: string[] = [];
+              let isFirstPoint = true;
+
+              data.forEach((point, index) => {
+                if (point.ema21 !== undefined && point.ema21 !== null) {
+                  const x = CHART_LEFT_MARGIN + index * (candleWidth + candleSpacing) + candleWidth / 2;
+                  const y = priceToY(point.ema21);
+                  pathParts.push(`${isFirstPoint ? 'M' : 'L'} ${x} ${y}`);
+                  isFirstPoint = false;
+                }
+              });
+
+              if (pathParts.length > 0) {
+                return (
+                  <Path
+                    d={pathParts.join(' ')}
+                    stroke={CHART_COLORS.ema21}
+                    strokeWidth="1.5"
+                    fill="none"
+                    opacity="0.5"
+                  />
+                );
+              }
+              return null;
+            })()}
+          </>
+        )}
+
+        {/* 6 — level lines (always on top of price layers) */}
+        {supportLevels.map((level) => {
+          const y = priceToY(level.price);
           return (
-            <Text 
-              key={index}
-              style={[
-                styles.axisLabel,
-                shouldRotateLabels && styles.axisLabelRotated,
-                { position: 'absolute', left: `${position}%` }
-              ]}
-            >
-              {label}
-            </Text>
+            <SvgLine
+              key={`support-${level.id}`}
+              x1={CHART_LEFT_MARGIN}
+              y1={y}
+              x2={rightEdge}
+              y2={y}
+              stroke={CHART_COLORS.support}
+              strokeWidth={level.strength === 'strong' ? 2 : 1.5}
+              strokeDasharray={level.strength === 'strong' ? '0' : '5,5'}
+              strokeOpacity={level.strength === 'weak' ? 0.6 : 1}
+            />
           );
         })}
+        {resistanceLevels.map((level) => {
+          const y = priceToY(level.price);
+          return (
+            <SvgLine
+              key={`resistance-${level.id}`}
+              x1={CHART_LEFT_MARGIN}
+              y1={y}
+              x2={rightEdge}
+              y2={y}
+              stroke={CHART_COLORS.resistance}
+              strokeWidth={level.strength === 'strong' ? 2 : 1.5}
+              strokeDasharray={level.strength === 'strong' ? '0' : '5,5'}
+              strokeOpacity={level.strength === 'weak' ? 0.6 : 1}
+            />
+          );
+        })}
+
+        {/* 7 — prediction overlay */}
+        {hasPrediction && (() => {
+          const layout = predictionLayout;
+          const lastIndex = data.length - 1;
+          const startX = xForIndex(lastIndex);
+          const startY = priceToY(data[lastIndex].close);
+          const bandPath = buildPredictionBandPath(projectedPath, layout.xForFutureIndex, priceToY, startX, startY);
+          const linePath = buildPredictionLinePath(projectedPath, layout.xForFutureIndex, priceToY, startX, startY);
+          return (
+            <G>
+              <SvgLine x1={layout.dividerX} y1={10} x2={layout.dividerX} y2={chartHeight + 10} stroke={CHART_COLORS.grid} strokeWidth="1" strokeDasharray="4,4" />
+              {bandPath ? <Path d={bandPath} fill={CHART_COLORS.predictionBand} stroke="none" /> : null}
+              {linePath ? <Path d={linePath} stroke={CHART_COLORS.prediction} strokeWidth="2.5" strokeDasharray="6,4" fill="none" /> : null}
+            </G>
+          );
+        })()}
+      </Svg>
+
+      {/* X-axis outside and below SVG */}
+      <ChartXLabels
+        width={width}
+        indices={xAxisIndices}
+        xForIndex={xForIndex}
+        labelFor={(index, tickIdx) =>
+          interval === '5d'
+            ? formatCompact5DLabel(
+                data[index]?.timestamp ?? 0,
+                data,
+                tickIdx,
+                xAxisIndices.map((i) => data[i]?.timestamp ?? 0)
+              )
+            : formatCompactDate(data[index]?.timestamp ?? 0, interval)
+        }
+      />
+    </View>
+  );
+}
+
+// Line chart using react-native-svg only (no Recharts / no DOM)
+interface SimpleLineChartProps {
+  data: MarketDataPoint[];
+  interval: ChartInterval;
+  minPrice: number;
+  maxPrice: number;
+  width: number;
+  height: number;
+  showEMA?: boolean;
+  showVolume?: boolean;
+  showVolumeProfile?: boolean;
+  volumeProfile?: Pick<VolumeProfileData, 'highVolumeNodes' | 'pointOfControl'> | null;
+  supportLevels?: AILevel[];
+  resistanceLevels?: AILevel[];
+  projectedPath?: ProjectedPoint[];
+  expectedChangePct?: number;
+  showPrediction?: boolean;
+}
+
+const X_AXIS_HEIGHT = 22;
+const CHART_LEFT_MARGIN = 50;
+const CHART_RIGHT_MARGIN = 15; // Space for Y-axis labels (min 60px) — used by SimpleCandlestickChart only
+
+function SimpleLineChart({
+  data,
+  interval,
+  minPrice,
+  maxPrice,
+  width,
+  height,
+  showEMA = true,
+  showVolume = false,
+  showVolumeProfile = false,
+  volumeProfile = null,
+  supportLevels = [],
+  resistanceLevels = [],
+  projectedPath = [],
+  expectedChangePct,
+  showPrediction = false,
+}: SimpleLineChartProps) {
+  const chartSvgHeight = height - X_AXIS_HEIGHT;
+  const rightEdge = width - 30;
+  const chartDrawableWidth = width - CHART_LEFT_MARGIN - 30;
+
+  const layout = getPredictionLayout(CHART_LEFT_MARGIN, chartDrawableWidth);
+  const hasPrediction = showPrediction && projectedPath.length > 0;
+
+  const priceToY = (price: number) => {
+    const range = maxPrice - minPrice;
+    const ratio = range > 0 ? (maxPrice - price) / range : 0;
+    return ratio * (chartSvgHeight - 10) + 10;
+  };
+
+  const stepX = data.length > 1
+    ? (hasPrediction ? layout.historicalWidth : chartDrawableWidth) / (data.length - 1)
+    : 0;
+  const xForIndex = (i: number) =>
+    hasPrediction
+      ? layout.xForHistoricalIndex(i, data.length)
+      : CHART_LEFT_MARGIN + i * stepX;
+
+  const tickCount = getTickCount(data.length, width);
+  const xAxisIndices = useMemo(() => {
+    if (data.length === 0) return [];
+    if (data.length <= tickCount) return data.map((_, i) => i);
+    const indices: number[] = [];
+    const step = Math.floor(data.length / (tickCount - 1));
+    for (let i = 0; i < tickCount - 1; i++) indices.push(i * step);
+    indices.push(data.length - 1);
+    return indices;
+  }, [data.length, tickCount]);
+
+  if (data.length === 0) {
+    return <View style={{ width, height }} />;
+  }
+
+  const closePathD = data
+    .map((point, i) => `${i === 0 ? 'M' : 'L'} ${xForIndex(i)} ${priceToY(point.close)}`)
+    .join(' ');
+
+  return (
+    <View style={{ width, height, overflow: 'visible' }}>
+      {/* Chart area: Y-axis on left (same as SimpleCandlestickChart), full width for drawing */}
+      <View style={{ height: chartSvgHeight, overflow: 'visible' }}>
+        <View style={styles.yAxisLabels}>
+          <Text style={styles.axisLabel}>{formatAxisPrice(maxPrice)}</Text>
+          <Text style={styles.axisLabel}>{formatAxisPrice((maxPrice + minPrice) / 2)}</Text>
+          <Text style={styles.axisLabel}>{formatAxisPrice(minPrice)}</Text>
+        </View>
+
+        <Svg width={width} height={chartSvgHeight}>
+          {showVolume ? (
+            <VolumeBars
+              data={data}
+              chartHeight={chartSvgHeight}
+              xForIndex={xForIndex}
+            />
+          ) : null}
+
+          {showVolumeProfile && volumeProfile?.highVolumeNodes?.length ? (
+            <VolumeProfile
+              nodes={volumeProfile.highVolumeNodes}
+              pointOfControl={volumeProfile.pointOfControl}
+              priceToY={priceToY}
+              rightEdge={rightEdge}
+              leftEdge={CHART_LEFT_MARGIN}
+              highlightedPrices={[
+                ...supportLevels.map((l) => ({ price: l.price, role: 'support' as const })),
+                ...resistanceLevels.map((l) => ({ price: l.price, role: 'resistance' as const })),
+              ]}
+            />
+          ) : null}
+
+          <SvgLine
+            x1={CHART_LEFT_MARGIN}
+            y1={priceToY(maxPrice)}
+            x2={rightEdge}
+            y2={priceToY(maxPrice)}
+            stroke={CHART_COLORS.grid}
+            strokeWidth="1"
+            strokeDasharray="3,3"
+          />
+          <SvgLine
+            x1={CHART_LEFT_MARGIN}
+            y1={priceToY((maxPrice + minPrice) / 2)}
+            x2={rightEdge}
+            y2={priceToY((maxPrice + minPrice) / 2)}
+            stroke={CHART_COLORS.grid}
+            strokeWidth="1"
+            strokeDasharray="3,3"
+          />
+          <SvgLine
+            x1={CHART_LEFT_MARGIN}
+            y1={priceToY(minPrice)}
+            x2={rightEdge}
+            y2={priceToY(minPrice)}
+            stroke={CHART_COLORS.grid}
+            strokeWidth="1"
+            strokeDasharray="3,3"
+          />
+
+          {xAxisIndices.map((index) => {
+            const xPosition = xForIndex(index);
+            const bottomY = chartSvgHeight - 10;
+            return (
+              <SvgLine
+                key={`tick-${index}`}
+                x1={xPosition}
+                y1={bottomY}
+                x2={xPosition}
+                y2={bottomY + 4}
+                stroke={CHART_COLORS.grid}
+                strokeWidth="1"
+              />
+            );
+          })}
+
+          <Path
+            d={closePathD}
+            stroke={CHART_COLORS.lineStroke}
+            strokeWidth="2.5"
+            fill="none"
+          />
+
+          {showEMA &&
+            (() => {
+              const parts: string[] = [];
+              data.forEach((point, i) => {
+                if (point.ema9 != null) {
+                  parts.push(`${parts.length ? 'L' : 'M'} ${xForIndex(i)} ${priceToY(point.ema9)}`);
+                }
+              });
+              return parts.length ? (
+                <Path
+                  d={parts.join(' ')}
+                  stroke={CHART_COLORS.ema9}
+                  strokeWidth="1.5"
+                  fill="none"
+                  opacity={0.5}
+                />
+              ) : null;
+            })()}
+
+          {showEMA &&
+            (() => {
+              const parts: string[] = [];
+              data.forEach((point, i) => {
+                if (point.ema21 != null) {
+                  parts.push(`${parts.length ? 'L' : 'M'} ${xForIndex(i)} ${priceToY(point.ema21)}`);
+                }
+              });
+              return parts.length ? (
+                <Path
+                  d={parts.join(' ')}
+                  stroke={CHART_COLORS.ema21}
+                  strokeWidth="1.5"
+                  fill="none"
+                  opacity={0.5}
+                />
+              ) : null;
+            })()}
+
+          {supportLevels.map((level) => (
+            <SvgLine
+              key={`support-${level.id}`}
+              x1={CHART_LEFT_MARGIN}
+              y1={priceToY(level.price)}
+              x2={rightEdge}
+              y2={priceToY(level.price)}
+              stroke={CHART_COLORS.support}
+              strokeWidth={level.strength === 'strong' ? 2 : 1.5}
+              strokeDasharray={level.strength === 'strong' ? '0' : '5,5'}
+              strokeOpacity={level.strength === 'weak' ? 0.6 : 1}
+            />
+          ))}
+
+          {resistanceLevels.map((level) => (
+            <SvgLine
+              key={`resistance-${level.id}`}
+              x1={CHART_LEFT_MARGIN}
+              y1={priceToY(level.price)}
+              x2={rightEdge}
+              y2={priceToY(level.price)}
+              stroke={CHART_COLORS.resistance}
+              strokeWidth={level.strength === 'strong' ? 2 : 1.5}
+              strokeDasharray={level.strength === 'strong' ? '0' : '5,5'}
+              strokeOpacity={level.strength === 'weak' ? 0.6 : 1}
+            />
+          ))}
+
+          {hasPrediction && (() => {
+            const lastIndex = data.length - 1;
+            const startX = xForIndex(lastIndex);
+            const startY = priceToY(data[lastIndex].close);
+            const bandPath = buildPredictionBandPath(
+              projectedPath,
+              layout.xForFutureIndex,
+              priceToY,
+              startX,
+              startY
+            );
+            const linePath = buildPredictionLinePath(
+              projectedPath,
+              layout.xForFutureIndex,
+              priceToY,
+              startX,
+              startY
+            );
+
+            return (
+              <G>
+                <SvgLine
+                  x1={layout.dividerX}
+                  y1={10}
+                  x2={layout.dividerX}
+                  y2={chartSvgHeight - 10}
+                  stroke={CHART_COLORS.grid}
+                  strokeWidth="1"
+                  strokeDasharray="4,4"
+                />
+                {bandPath ? (
+                  <Path d={bandPath} fill={CHART_COLORS.predictionBand} stroke="none" />
+                ) : null}
+                {linePath ? (
+                  <Path
+                    d={linePath}
+                    stroke={CHART_COLORS.prediction}
+                    strokeWidth="2.5"
+                    strokeDasharray="6,4"
+                    fill="none"
+                  />
+                ) : null}
+              </G>
+            );
+          })()}
+        </Svg>
       </View>
+
+      {/* X-axis labels - outside and below SVG */}
+      <ChartXLabels
+        width={width}
+        indices={xAxisIndices}
+        xForIndex={xForIndex}
+        labelFor={(index, tickIdx) =>
+          interval === '5d'
+            ? formatCompact5DLabel(
+                data[index]?.timestamp ?? 0,
+                data,
+                tickIdx,
+                xAxisIndices.map((i) => data[i]?.timestamp ?? 0)
+              )
+            : formatCompactDate(data[index]?.timestamp ?? 0, interval)
+        }
+      />
     </View>
   );
 }
@@ -746,8 +1166,8 @@ function TooltipRow({
 }) {
   return (
     <View style={styles.tooltipRow}>
-      <Text style={[styles.tooltipLabel, color && { color }]}>{label}</Text>
-      <Text style={[styles.tooltipValue, color && { color }]}>{value}</Text>
+      <Text style={[styles.tooltipLabel, color ? { color } : undefined]}>{label}</Text>
+      <Text style={[styles.tooltipValue, color ? { color } : undefined]}>{value}</Text>
     </View>
   );
 }
@@ -762,11 +1182,16 @@ function LegendItem({ color, label }: { color: string; label: string }) {
 }
 
 const styles = StyleSheet.create({
+  plotSlot: {
+    width: '100%',
+  },
   container: {
     backgroundColor: CHART_COLORS.background,
     borderRadius: borderRadius.xl,
     padding: spacing.sm,
-    overflow: 'hidden',
+    paddingTop: spacing.md,
+    paddingBottom: spacing.md,
+    overflow: 'visible',
   },
   tooltip: {
     backgroundColor: colors.surface,
@@ -804,9 +1229,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'center',
-    gap: spacing.md,
-    marginTop: spacing.sm,
-    paddingTop: spacing.sm,
+    gap: spacing.sm,
+    rowGap: 4,
+    marginTop: 4,
+    paddingTop: spacing.xs,
     borderTopWidth: 1,
     borderTopColor: colors.neutral[100],
   },
@@ -832,22 +1258,31 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     zIndex: 10,
   },
-  xAxis: {
-    flexDirection: 'row',
-    position: 'relative',
-    marginTop: spacing.xs,
-    paddingHorizontal: 50,
-    height: 20,
+  yAxisLabelsRight: {
+    position: 'absolute',
+    right: 0,
+    top: 10,
+    width: 60,
+    height: '80%',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    zIndex: 10,
   },
-  xAxisRotated: {
-    height: 40,
+  xAxis: {
+    position: 'relative',
+    height: 18,
+    marginTop: 2,
+  },
+  xAxisLabel: {
+    fontSize: 11,
+    lineHeight: 14,
+    color: colors.neutral[500],
+    textAlign: 'center',
   },
   axisLabel: {
     ...typography.labelSm,
     color: colors.neutral[500],
-  },
-  axisLabelRotated: {
-    transform: [{ rotate: '-45deg' }],
-    fontSize: 9,
+    backgroundColor: 'rgba(249,250,251,0.8)',
+    paddingHorizontal: 2,
   },
 });

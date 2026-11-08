@@ -1,6 +1,8 @@
 // Chart Analysis Domain Types
 // These define the contract between OpenAI Vision output and the app
 
+import type { DataFreshness } from './dataFreshness';
+
 export type TrendType = 'uptrend' | 'downtrend' | 'range' | 'mixed';
 export type TimeframeType = '1m' | '5m' | '15m' | '30m' | '1h' | '4h' | 'D' | 'W' | 'M' | null;
 export type LevelRole = 'support' | 'resistance' | 'demand_zone' | 'supply_zone';
@@ -168,4 +170,8 @@ export interface AnalysisHistoryItem {
   symbol: string | null;
   timeframe: TimeframeType;
   headline: string;
+  /** Linked forecast from the same Atlas run, when available */
+  predictionId?: string;
+  /** Stored feed timestamp from analysis_json. Absent on pre-migration rows. */
+  freshness?: DataFreshness;
 }

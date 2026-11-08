@@ -1,16 +1,54 @@
 {
   "expo": {
-    "name": "chartsignl",
+    "name": "ChartSignl",
     "slug": "chartsignl",
-    "version": "1.0.0",
-    "sdkVersion": "50.0.0",
+    "version": "1.1.3",
+    "sdkVersion": "54.0.0",
+    "scheme": "chartsignl",
     "platforms": [
       "ios",
       "android",
       "web"
     ],
+    "icon": "./apps/mobile/assets/icon.png",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.optionsplungellc.chartsignl",
+      "associatedDomains": [
+        "applinks:chartsignl.com"
+      ],
+      "icon": "./apps/mobile/assets/icon.png"
+    },
     "android": {
-      "package": "com.chartsignl.app"
+      "package": "com.optionsplungellc.chartsignl",
+      "permissions": [
+        "com.android.vending.BILLING"
+      ],
+      "adaptiveIcon": {
+        "foregroundImage": "./apps/mobile/assets/adaptive-icon.png",
+        "backgroundColor": "#F0F9F9"
+      },
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "data": [
+            {
+              "scheme": "chartsignl",
+              "host": "auth",
+              "pathPrefix": "/reset-password"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ]
+    },
+    "extra": {
+      "eas": {
+        "projectId": "6d633a95-d09f-43c6-959f-20879ad24a44"
+      }
     }
   }
 }

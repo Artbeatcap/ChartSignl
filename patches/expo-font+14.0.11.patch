@@ -1,0 +1,748 @@
+diff --git a/node_modules/expo-font/android/build.gradle b/node_modules/expo-font/android/build.gradle
+index b7c1fa6..1950df6 100644
+--- a/node_modules/expo-font/android/build.gradle
++++ b/node_modules/expo-font/android/build.gradle
+@@ -1,12 +1,57 @@
+-plugins {
+-  id 'com.android.library'
+-  id 'expo-module-gradle-plugin'
+-}
++apply plugin: 'com.android.library'
++apply plugin: 'kotlin-android'
++apply plugin: 'maven-publish'
+ 
+ group = 'host.exp.exponent'
+ version = '14.0.11'
+ 
++def expoModulesCorePlugin = new File(project(":expo-modules-core").projectDir.absolutePath, "ExpoModulesCorePlugin.gradle")
++if (expoModulesCorePlugin.exists()) {
++  apply from: expoModulesCorePlugin
++  applyKotlinExpoModulesCorePlugin()
++  if (safeExtGet("expoProvidesDefaultConfig", false)) {
++    useExpoPublishing()
++    useCoreDependencies()
++  }
++}
++
++buildscript {
++  ext.safeExtGet = { prop, fallback ->
++    rootProject.ext.has(prop) ? rootProject.ext.get(prop) : fallback
++  }
++  ext.getKotlinVersion = {
++    if (ext.has("kotlinVersion")) ext.kotlinVersion() else ext.safeExtGet("kotlinVersion", "1.8.10")
++  }
++  repositories { mavenCentral() }
++  dependencies {
++    classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:${getKotlinVersion()}")
++  }
++}
++
++if (!safeExtGet("expoProvidesDefaultConfig", false)) {
++  afterEvaluate {
++    def releaseComponent = components.findByName("release")
++    if (releaseComponent != null) {
++      publishing {
++        publications { release(MavenPublication) { from releaseComponent } }
++        repositories { maven { url = mavenLocal().url } }
++      }
++    }
++  }
++}
++
+ android {
++  if (!safeExtGet("expoProvidesDefaultConfig", false)) {
++    compileSdkVersion safeExtGet("compileSdkVersion", 34)
++    defaultConfig {
++      minSdkVersion safeExtGet("minSdkVersion", 23)
++      targetSdkVersion safeExtGet("targetSdkVersion", 34)
++    }
++    publishing {
++      singleVariant("release") { withSourcesJar() }
++    }
++    lintOptions { abortOnError false }
++  }
+   namespace "expo.modules.font"
+   defaultConfig {
+     versionCode 29
+@@ -15,5 +60,9 @@ android {
+ }
+ 
+ dependencies {
++  if (!safeExtGet("expoProvidesDefaultConfig", false)) {
++    implementation project(':expo-modules-core')
++    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:${getKotlinVersion()}"
++  }
+   implementation 'com.facebook.react:react-android'
+ }
+diff --git a/node_modules/expo-font/android/build/.transforms/4bda3fbc28984fa7c565bd9eb7a79160/results.bin b/node_modules/expo-font/android/build/.transforms/4bda3fbc28984fa7c565bd9eb7a79160/results.bin
+new file mode 100644
+index 0000000..e3f0ff0
+--- /dev/null
++++ b/node_modules/expo-font/android/build/.transforms/4bda3fbc28984fa7c565bd9eb7a79160/results.bin
+@@ -0,0 +1 @@
++i/classes_global-synthetics
+diff --git a/node_modules/expo-font/android/build/.transforms/6f1193481a6e9acfeafaea922ed29755/results.bin b/node_modules/expo-font/android/build/.transforms/6f1193481a6e9acfeafaea922ed29755/results.bin
+new file mode 100644
+index 0000000..61a58fa
+--- /dev/null
++++ b/node_modules/expo-font/android/build/.transforms/6f1193481a6e9acfeafaea922ed29755/results.bin
+@@ -0,0 +1 @@
++i/classes_dex
+diff --git a/node_modules/expo-font/android/build/.transforms/ec626c00739c2f68ab8fcc3e597c4a58/results.bin b/node_modules/expo-font/android/build/.transforms/ec626c00739c2f68ab8fcc3e597c4a58/results.bin
+new file mode 100644
+index 0000000..0d259dd
+--- /dev/null
++++ b/node_modules/expo-font/android/build/.transforms/ec626c00739c2f68ab8fcc3e597c4a58/results.bin
+@@ -0,0 +1 @@
++o/classes
+diff --git a/node_modules/expo-font/android/build/.transforms/ec626c00739c2f68ab8fcc3e597c4a58/transformed/classes/classes_dex/classes.dex b/node_modules/expo-font/android/build/.transforms/ec626c00739c2f68ab8fcc3e597c4a58/transformed/classes/classes_dex/classes.dex
+new file mode 100644
+index 0000000..5a4617a
+Binary files /dev/null and b/node_modules/expo-font/android/build/.transforms/ec626c00739c2f68ab8fcc3e597c4a58/transformed/classes/classes_dex/classes.dex differ
+diff --git a/node_modules/expo-font/android/build/generated/source/buildConfig/release/expo/modules/font/BuildConfig.java b/node_modules/expo-font/android/build/generated/source/buildConfig/release/expo/modules/font/BuildConfig.java
+new file mode 100644
+index 0000000..74cb604
+--- /dev/null
++++ b/node_modules/expo-font/android/build/generated/source/buildConfig/release/expo/modules/font/BuildConfig.java
+@@ -0,0 +1,10 @@
++/**
++ * Automatically generated file. DO NOT MODIFY
++ */
++package expo.modules.font;
++
++public final class BuildConfig {
++  public static final boolean DEBUG = false;
++  public static final String LIBRARY_PACKAGE_NAME = "expo.modules.font";
++  public static final String BUILD_TYPE = "release";
++}
+diff --git a/node_modules/expo-font/android/build/intermediates/aapt_friendly_merged_manifests/release/aapt/AndroidManifest.xml b/node_modules/expo-font/android/build/intermediates/aapt_friendly_merged_manifests/release/aapt/AndroidManifest.xml
+new file mode 100644
+index 0000000..51398aa
+--- /dev/null
++++ b/node_modules/expo-font/android/build/intermediates/aapt_friendly_merged_manifests/release/aapt/AndroidManifest.xml
+@@ -0,0 +1,7 @@
++<?xml version="1.0" encoding="utf-8"?>
++<manifest xmlns:android="http://schemas.android.com/apk/res/android"
++    package="expo.modules.font" >
++
++    <uses-sdk android:minSdkVersion="21" />
++
++</manifest>
+\ No newline at end of file
+diff --git a/node_modules/expo-font/android/build/intermediates/aapt_friendly_merged_manifests/release/aapt/output-metadata.json b/node_modules/expo-font/android/build/intermediates/aapt_friendly_merged_manifests/release/aapt/output-metadata.json
+new file mode 100644
+index 0000000..3e33412
+--- /dev/null
++++ b/node_modules/expo-font/android/build/intermediates/aapt_friendly_merged_manifests/release/aapt/output-metadata.json
+@@ -0,0 +1,18 @@
++{
++  "version": 3,
++  "artifactType": {
++    "type": "AAPT_FRIENDLY_MERGED_MANIFESTS",
++    "kind": "Directory"
++  },
++  "applicationId": "expo.modules.font",
++  "variantName": "release",
++  "elements": [
++    {
++      "type": "SINGLE",
++      "filters": [],
++      "attributes": [],
++      "outputFile": "AndroidManifest.xml"
++    }
++  ],
++  "elementType": "File"
++}
+\ No newline at end of file
+diff --git a/node_modules/expo-font/android/build/intermediates/aar_metadata/release/aar-metadata.properties b/node_modules/expo-font/android/build/intermediates/aar_metadata/release/aar-metadata.properties
+new file mode 100644
+index 0000000..776557e
+--- /dev/null
++++ b/node_modules/expo-font/android/build/intermediates/aar_metadata/release/aar-metadata.properties
+@@ -0,0 +1,5 @@
++aarFormatVersion=1.0
++aarMetadataVersion=1.0
++minCompileSdk=1
++minCompileSdkExtension=0
++minAndroidGradlePluginVersion=1.0.0
+diff --git a/node_modules/expo-font/android/build/intermediates/annotation_processor_list/release/annotationProcessors.json b/node_modules/expo-font/android/build/intermediates/annotation_processor_list/release/annotationProcessors.json
+new file mode 100644
+index 0000000..9e26dfe
+--- /dev/null
++++ b/node_modules/expo-font/android/build/intermediates/annotation_processor_list/release/annotationProcessors.json
+@@ -0,0 +1 @@
++{}
+\ No newline at end of file
+diff --git a/node_modules/expo-font/android/build/intermediates/compile_library_classes_jar/release/classes.jar b/node_modules/expo-font/android/build/intermediates/compile_library_classes_jar/release/classes.jar
+new file mode 100644
+index 0000000..871c062
+Binary files /dev/null and b/node_modules/expo-font/android/build/intermediates/compile_library_classes_jar/release/classes.jar differ
+diff --git a/node_modules/expo-font/android/build/intermediates/compile_r_class_jar/release/R.jar b/node_modules/expo-font/android/build/intermediates/compile_r_class_jar/release/R.jar
+new file mode 100644
+index 0000000..d5e7718
+Binary files /dev/null and b/node_modules/expo-font/android/build/intermediates/compile_r_class_jar/release/R.jar differ
+diff --git a/node_modules/expo-font/android/build/intermediates/compile_symbol_list/release/R.txt b/node_modules/expo-font/android/build/intermediates/compile_symbol_list/release/R.txt
+new file mode 100644
+index 0000000..e69de29
+diff --git a/node_modules/expo-font/android/build/intermediates/incremental/mergeReleaseJniLibFolders/merger.xml b/node_modules/expo-font/android/build/intermediates/incremental/mergeReleaseJniLibFolders/merger.xml
+new file mode 100644
+index 0000000..3f705ab
+--- /dev/null
++++ b/node_modules/expo-font/android/build/intermediates/incremental/mergeReleaseJniLibFolders/merger.xml
+@@ -0,0 +1,2 @@
++<?xml version="1.0" encoding="utf-8"?>
++<merger version="3"><dataSet config="main" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="C:\Users\Art\VScode\chartsignl_80eb2710\node_modules\expo-font\android\src\main\jniLibs"/></dataSet><dataSet config="release" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="C:\Users\Art\VScode\chartsignl_80eb2710\node_modules\expo-font\android\src\release\jniLibs"/></dataSet></merger>
+\ No newline at end of file
+diff --git a/node_modules/expo-font/android/build/intermediates/incremental/mergeReleaseShaders/merger.xml b/node_modules/expo-font/android/build/intermediates/incremental/mergeReleaseShaders/merger.xml
+new file mode 100644
+index 0000000..4f24278
+--- /dev/null
++++ b/node_modules/expo-font/android/build/intermediates/incremental/mergeReleaseShaders/merger.xml
+@@ -0,0 +1,2 @@
++<?xml version="1.0" encoding="utf-8"?>
++<merger version="3"><dataSet config="main" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="C:\Users\Art\VScode\chartsignl_80eb2710\node_modules\expo-font\android\src\main\shaders"/></dataSet><dataSet config="release" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="C:\Users\Art\VScode\chartsignl_80eb2710\node_modules\expo-font\android\src\release\shaders"/></dataSet></merger>
+\ No newline at end of file
+diff --git a/node_modules/expo-font/android/build/intermediates/incremental/packageReleaseAssets/merger.xml b/node_modules/expo-font/android/build/intermediates/incremental/packageReleaseAssets/merger.xml
+new file mode 100644
+index 0000000..215020f
+--- /dev/null
++++ b/node_modules/expo-font/android/build/intermediates/incremental/packageReleaseAssets/merger.xml
+@@ -0,0 +1,2 @@
++<?xml version="1.0" encoding="utf-8"?>
++<merger version="3"><dataSet config="main" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="C:\Users\Art\VScode\chartsignl_80eb2710\node_modules\expo-font\android\src\main\assets"/></dataSet><dataSet config="release" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="C:\Users\Art\VScode\chartsignl_80eb2710\node_modules\expo-font\android\src\release\assets"/></dataSet><dataSet config="generated" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="C:\Users\Art\VScode\chartsignl_80eb2710\node_modules\expo-font\android\build\intermediates\shader_assets\release\out"/></dataSet></merger>
+\ No newline at end of file
+diff --git a/node_modules/expo-font/android/build/intermediates/incremental/release/packageReleaseResources/compile-file-map.properties b/node_modules/expo-font/android/build/intermediates/incremental/release/packageReleaseResources/compile-file-map.properties
+new file mode 100644
+index 0000000..eb6827a
+--- /dev/null
++++ b/node_modules/expo-font/android/build/intermediates/incremental/release/packageReleaseResources/compile-file-map.properties
+@@ -0,0 +1 @@
++#Sat Feb 14 23:25:58 EST 2026
+diff --git a/node_modules/expo-font/android/build/intermediates/incremental/release/packageReleaseResources/merger.xml b/node_modules/expo-font/android/build/intermediates/incremental/release/packageReleaseResources/merger.xml
+new file mode 100644
+index 0000000..5bc9663
+--- /dev/null
++++ b/node_modules/expo-font/android/build/intermediates/incremental/release/packageReleaseResources/merger.xml
+@@ -0,0 +1,2 @@
++<?xml version="1.0" encoding="utf-8"?>
++<merger version="3"><dataSet aapt-namespace="http://schemas.android.com/apk/res-auto" config="main$Generated" generated="true" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="C:\Users\Art\VScode\chartsignl_80eb2710\node_modules\expo-font\android\src\main\res"/></dataSet><dataSet aapt-namespace="http://schemas.android.com/apk/res-auto" config="main" generated-set="main$Generated" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="C:\Users\Art\VScode\chartsignl_80eb2710\node_modules\expo-font\android\src\main\res"/></dataSet><dataSet aapt-namespace="http://schemas.android.com/apk/res-auto" config="release$Generated" generated="true" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="C:\Users\Art\VScode\chartsignl_80eb2710\node_modules\expo-font\android\src\release\res"/></dataSet><dataSet aapt-namespace="http://schemas.android.com/apk/res-auto" config="release" generated-set="release$Generated" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="C:\Users\Art\VScode\chartsignl_80eb2710\node_modules\expo-font\android\src\release\res"/></dataSet><dataSet aapt-namespace="http://schemas.android.com/apk/res-auto" config="generated$Generated" generated="true" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="C:\Users\Art\VScode\chartsignl_80eb2710\node_modules\expo-font\android\build\generated\res\resValues\release"/></dataSet><dataSet aapt-namespace="http://schemas.android.com/apk/res-auto" config="generated" generated-set="generated$Generated" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="C:\Users\Art\VScode\chartsignl_80eb2710\node_modules\expo-font\android\build\generated\res\resValues\release"/></dataSet><mergedItems/></merger>
+\ No newline at end of file
+diff --git a/node_modules/expo-font/android/build/intermediates/java_res/release/out/META-INF/expo-font_release.kotlin_module b/node_modules/expo-font/android/build/intermediates/java_res/release/out/META-INF/expo-font_release.kotlin_module
+new file mode 100644
+index 0000000..b6429b4
+Binary files /dev/null and b/node_modules/expo-font/android/build/intermediates/java_res/release/out/META-INF/expo-font_release.kotlin_module differ
+diff --git a/node_modules/expo-font/android/build/intermediates/javac/release/classes/expo/modules/font/BuildConfig.class b/node_modules/expo-font/android/build/intermediates/javac/release/classes/expo/modules/font/BuildConfig.class
+new file mode 100644
+index 0000000..8aa1775
+Binary files /dev/null and b/node_modules/expo-font/android/build/intermediates/javac/release/classes/expo/modules/font/BuildConfig.class differ
+diff --git a/node_modules/expo-font/android/build/intermediates/local_only_symbol_list/release/R-def.txt b/node_modules/expo-font/android/build/intermediates/local_only_symbol_list/release/R-def.txt
+new file mode 100644
+index 0000000..78ac5b8
+--- /dev/null
++++ b/node_modules/expo-font/android/build/intermediates/local_only_symbol_list/release/R-def.txt
+@@ -0,0 +1,2 @@
++R_DEF: Internal format may change without notice
++local
+diff --git a/node_modules/expo-font/android/build/intermediates/manifest_merge_blame_file/release/manifest-merger-blame-release-report.txt b/node_modules/expo-font/android/build/intermediates/manifest_merge_blame_file/release/manifest-merger-blame-release-report.txt
+new file mode 100644
+index 0000000..54b134c
+--- /dev/null
++++ b/node_modules/expo-font/android/build/intermediates/manifest_merge_blame_file/release/manifest-merger-blame-release-report.txt
+@@ -0,0 +1,7 @@
++1<?xml version="1.0" encoding="utf-8"?>
++2<manifest xmlns:android="http://schemas.android.com/apk/res/android"
++3    package="expo.modules.font" >
++4
++5    <uses-sdk android:minSdkVersion="21" />
++6
++7</manifest>
+diff --git a/node_modules/expo-font/android/build/intermediates/merged_manifest/release/AndroidManifest.xml b/node_modules/expo-font/android/build/intermediates/merged_manifest/release/AndroidManifest.xml
+new file mode 100644
+index 0000000..51398aa
+--- /dev/null
++++ b/node_modules/expo-font/android/build/intermediates/merged_manifest/release/AndroidManifest.xml
+@@ -0,0 +1,7 @@
++<?xml version="1.0" encoding="utf-8"?>
++<manifest xmlns:android="http://schemas.android.com/apk/res/android"
++    package="expo.modules.font" >
++
++    <uses-sdk android:minSdkVersion="21" />
++
++</manifest>
+\ No newline at end of file
+diff --git a/node_modules/expo-font/android/build/intermediates/navigation_json/release/navigation.json b/node_modules/expo-font/android/build/intermediates/navigation_json/release/navigation.json
+new file mode 100644
+index 0000000..0637a08
+--- /dev/null
++++ b/node_modules/expo-font/android/build/intermediates/navigation_json/release/navigation.json
+@@ -0,0 +1 @@
++[]
+\ No newline at end of file
+diff --git a/node_modules/expo-font/android/build/intermediates/runtime_library_classes_jar/release/classes.jar b/node_modules/expo-font/android/build/intermediates/runtime_library_classes_jar/release/classes.jar
+new file mode 100644
+index 0000000..488af34
+Binary files /dev/null and b/node_modules/expo-font/android/build/intermediates/runtime_library_classes_jar/release/classes.jar differ
+diff --git a/node_modules/expo-font/android/build/intermediates/symbol_list_with_package_name/release/package-aware-r.txt b/node_modules/expo-font/android/build/intermediates/symbol_list_with_package_name/release/package-aware-r.txt
+new file mode 100644
+index 0000000..d81cad2
+--- /dev/null
++++ b/node_modules/expo-font/android/build/intermediates/symbol_list_with_package_name/release/package-aware-r.txt
+@@ -0,0 +1 @@
++expo.modules.font
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/inputs/source-to-output.tab b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/inputs/source-to-output.tab
+new file mode 100644
+index 0000000..b9f0932
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/inputs/source-to-output.tab differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/inputs/source-to-output.tab.keystream b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/inputs/source-to-output.tab.keystream
+new file mode 100644
+index 0000000..6d8e84d
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/inputs/source-to-output.tab.keystream differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/inputs/source-to-output.tab.keystream.len b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/inputs/source-to-output.tab.keystream.len
+new file mode 100644
+index 0000000..575d132
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/inputs/source-to-output.tab.keystream.len differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/inputs/source-to-output.tab.len b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/inputs/source-to-output.tab.len
+new file mode 100644
+index 0000000..a9f80ae
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/inputs/source-to-output.tab.len differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/inputs/source-to-output.tab.values.at b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/inputs/source-to-output.tab.values.at
+new file mode 100644
+index 0000000..a03fdb6
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/inputs/source-to-output.tab.values.at differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/inputs/source-to-output.tab_i b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/inputs/source-to-output.tab_i
+new file mode 100644
+index 0000000..cdde836
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/inputs/source-to-output.tab_i differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/inputs/source-to-output.tab_i.len b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/inputs/source-to-output.tab_i.len
+new file mode 100644
+index 0000000..131e265
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/inputs/source-to-output.tab_i.len differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab
+new file mode 100644
+index 0000000..706fee0
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab.keystream b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab.keystream
+new file mode 100644
+index 0000000..143ea3f
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab.keystream differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab.keystream.len b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab.keystream.len
+new file mode 100644
+index 0000000..d2de2a6
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab.keystream.len differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab.len b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab.len
+new file mode 100644
+index 0000000..ec8f944
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab.len differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab.values.at b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab.values.at
+new file mode 100644
+index 0000000..3737e13
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab.values.at differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab_i b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab_i
+new file mode 100644
+index 0000000..659fc16
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab_i differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab_i.len b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab_i.len
+new file mode 100644
+index 0000000..131e265
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab_i.len differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab
+new file mode 100644
+index 0000000..fce0555
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab.keystream b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab.keystream
+new file mode 100644
+index 0000000..143ea3f
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab.keystream differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab.keystream.len b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab.keystream.len
+new file mode 100644
+index 0000000..d2de2a6
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab.keystream.len differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab.len b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab.len
+new file mode 100644
+index 0000000..ec8f944
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab.len differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab.values.at b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab.values.at
+new file mode 100644
+index 0000000..f408d85
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab.values.at differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab_i b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab_i
+new file mode 100644
+index 0000000..659fc16
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab_i differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab_i.len b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab_i.len
+new file mode 100644
+index 0000000..131e265
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab_i.len differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab
+new file mode 100644
+index 0000000..df3e7c6
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab.keystream b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab.keystream
+new file mode 100644
+index 0000000..641fe3b
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab.keystream differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab.keystream.len b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab.keystream.len
+new file mode 100644
+index 0000000..42971ab
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab.keystream.len differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab.len b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab.len
+new file mode 100644
+index 0000000..14f7c06
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab.len differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab.values.at b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab.values.at
+new file mode 100644
+index 0000000..4fa2088
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab.values.at differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab_i b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab_i
+new file mode 100644
+index 0000000..2e66c53
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab_i differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab_i.len b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab_i.len
+new file mode 100644
+index 0000000..131e265
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab_i.len differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/package-parts.tab b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/package-parts.tab
+new file mode 100644
+index 0000000..bdf584a
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/package-parts.tab differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/package-parts.tab.keystream b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/package-parts.tab.keystream
+new file mode 100644
+index 0000000..f9e96a9
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/package-parts.tab.keystream differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/package-parts.tab.keystream.len b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/package-parts.tab.keystream.len
+new file mode 100644
+index 0000000..beea674
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/package-parts.tab.keystream.len differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/package-parts.tab.len b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/package-parts.tab.len
+new file mode 100644
+index 0000000..2a17e6e
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/package-parts.tab.len differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/package-parts.tab.values.at b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/package-parts.tab.values.at
+new file mode 100644
+index 0000000..46d6744
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/package-parts.tab.values.at differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/package-parts.tab_i b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/package-parts.tab_i
+new file mode 100644
+index 0000000..f03b035
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/package-parts.tab_i differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/package-parts.tab_i.len b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/package-parts.tab_i.len
+new file mode 100644
+index 0000000..131e265
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/package-parts.tab_i.len differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab
+new file mode 100644
+index 0000000..1077721
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.keystream b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.keystream
+new file mode 100644
+index 0000000..359afd4
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.keystream differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.keystream.len b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.keystream.len
+new file mode 100644
+index 0000000..60c63bb
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.keystream.len differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.len b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.len
+new file mode 100644
+index 0000000..817b326
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.len differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.values.at b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.values.at
+new file mode 100644
+index 0000000..acd0eab
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.values.at differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab_i b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab_i
+new file mode 100644
+index 0000000..61534a0
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab_i differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab_i.len b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab_i.len
+new file mode 100644
+index 0000000..131e265
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab_i.len differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab
+new file mode 100644
+index 0000000..2af4fc5
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab.keystream b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab.keystream
+new file mode 100644
+index 0000000..7d58a48
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab.keystream differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab.keystream.len b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab.keystream.len
+new file mode 100644
+index 0000000..575d132
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab.keystream.len differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab.len b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab.len
+new file mode 100644
+index 0000000..a9f80ae
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab.len differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab.values.at b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab.values.at
+new file mode 100644
+index 0000000..5a979b7
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab.values.at differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab_i b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab_i
+new file mode 100644
+index 0000000..10cebc8
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab_i differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab_i.len b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab_i.len
+new file mode 100644
+index 0000000..131e265
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab_i.len differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab
+new file mode 100644
+index 0000000..c64411c
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab.keystream b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab.keystream
+new file mode 100644
+index 0000000..ab7fea1
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab.keystream differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab.keystream.len b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab.keystream.len
+new file mode 100644
+index 0000000..bdf0f19
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab.keystream.len differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab.len b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab.len
+new file mode 100644
+index 0000000..a9f80ae
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab.len differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab.values.at b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab.values.at
+new file mode 100644
+index 0000000..6e15de7
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab.values.at differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab_i b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab_i
+new file mode 100644
+index 0000000..6b86a8d
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab_i differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab_i.len b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab_i.len
+new file mode 100644
+index 0000000..131e265
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab_i.len differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab
+new file mode 100644
+index 0000000..25bf3e5
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab.keystream b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab.keystream
+new file mode 100644
+index 0000000..143ea3f
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab.keystream differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab.keystream.len b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab.keystream.len
+new file mode 100644
+index 0000000..d2de2a6
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab.keystream.len differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab.len b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab.len
+new file mode 100644
+index 0000000..ec8f944
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab.len differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab.values.at b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab.values.at
+new file mode 100644
+index 0000000..c326635
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab.values.at differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab_i b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab_i
+new file mode 100644
+index 0000000..659fc16
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab_i differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab_i.len b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab_i.len
+new file mode 100644
+index 0000000..131e265
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab_i.len differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/counters.tab b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/counters.tab
+new file mode 100644
+index 0000000..c393a51
+--- /dev/null
++++ b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/counters.tab
+@@ -0,0 +1,2 @@
++3
++0
+\ No newline at end of file
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/file-to-id.tab b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/file-to-id.tab
+new file mode 100644
+index 0000000..66986da
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/file-to-id.tab differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/file-to-id.tab.keystream b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/file-to-id.tab.keystream
+new file mode 100644
+index 0000000..7d58a48
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/file-to-id.tab.keystream differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/file-to-id.tab.keystream.len b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/file-to-id.tab.keystream.len
+new file mode 100644
+index 0000000..575d132
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/file-to-id.tab.keystream.len differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/file-to-id.tab.len b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/file-to-id.tab.len
+new file mode 100644
+index 0000000..a9f80ae
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/file-to-id.tab.len differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/file-to-id.tab.values.at b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/file-to-id.tab.values.at
+new file mode 100644
+index 0000000..9f383b5
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/file-to-id.tab.values.at differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/file-to-id.tab_i b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/file-to-id.tab_i
+new file mode 100644
+index 0000000..cd4616c
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/file-to-id.tab_i differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/file-to-id.tab_i.len b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/file-to-id.tab_i.len
+new file mode 100644
+index 0000000..131e265
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/file-to-id.tab_i.len differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/id-to-file.tab b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/id-to-file.tab
+new file mode 100644
+index 0000000..9af7726
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/id-to-file.tab differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/id-to-file.tab.keystream b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/id-to-file.tab.keystream
+new file mode 100644
+index 0000000..636f34a
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/id-to-file.tab.keystream differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/id-to-file.tab.keystream.len b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/id-to-file.tab.keystream.len
+new file mode 100644
+index 0000000..29ce11c
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/id-to-file.tab.keystream.len differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/id-to-file.tab.len b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/id-to-file.tab.len
+new file mode 100644
+index 0000000..a9f80ae
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/id-to-file.tab.len differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/id-to-file.tab.values.at b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/id-to-file.tab.values.at
+new file mode 100644
+index 0000000..870a6b6
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/id-to-file.tab.values.at differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/id-to-file.tab_i b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/id-to-file.tab_i
+new file mode 100644
+index 0000000..e9905b3
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/id-to-file.tab_i differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/id-to-file.tab_i.len b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/id-to-file.tab_i.len
+new file mode 100644
+index 0000000..131e265
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/id-to-file.tab_i.len differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/lookups.tab b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/lookups.tab
+new file mode 100644
+index 0000000..9f8cd6e
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/lookups.tab differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/lookups.tab.keystream b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/lookups.tab.keystream
+new file mode 100644
+index 0000000..af4da63
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/lookups.tab.keystream differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/lookups.tab.keystream.len b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/lookups.tab.keystream.len
+new file mode 100644
+index 0000000..fba4560
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/lookups.tab.keystream.len differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/lookups.tab.len b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/lookups.tab.len
+new file mode 100644
+index 0000000..d6ce5ce
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/lookups.tab.len differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/lookups.tab.values.at b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/lookups.tab.values.at
+new file mode 100644
+index 0000000..91f3468
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/lookups.tab.values.at differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/lookups.tab_i b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/lookups.tab_i
+new file mode 100644
+index 0000000..e5c7ae7
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/lookups.tab_i differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/lookups.tab_i.len b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/lookups.tab_i.len
+new file mode 100644
+index 0000000..131e265
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/lookups.tab_i.len differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/last-build.bin b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/last-build.bin
+new file mode 100644
+index 0000000..80dac3f
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/cacheable/last-build.bin differ
+diff --git a/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/local-state/build-history.bin b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/local-state/build-history.bin
+new file mode 100644
+index 0000000..dce81b0
+Binary files /dev/null and b/node_modules/expo-font/android/build/kotlin/compileReleaseKotlin/local-state/build-history.bin differ
+diff --git a/node_modules/expo-font/android/build/outputs/logs/manifest-merger-release-report.txt b/node_modules/expo-font/android/build/outputs/logs/manifest-merger-release-report.txt
+new file mode 100644
+index 0000000..190ea36
+--- /dev/null
++++ b/node_modules/expo-font/android/build/outputs/logs/manifest-merger-release-report.txt
+@@ -0,0 +1,14 @@
++-- Merging decision tree log ---
++manifest
++ADDED from C:\Users\Art\VScode\chartsignl_80eb2710\node_modules\expo-font\android\src\main\AndroidManifest.xml:1:1-3:12
++INJECTED from C:\Users\Art\VScode\chartsignl_80eb2710\node_modules\expo-font\android\src\main\AndroidManifest.xml:1:1-3:12
++	package
++		INJECTED from C:\Users\Art\VScode\chartsignl_80eb2710\node_modules\expo-font\android\src\main\AndroidManifest.xml
++uses-sdk
++INJECTED from C:\Users\Art\VScode\chartsignl_80eb2710\node_modules\expo-font\android\src\main\AndroidManifest.xml reason: use-sdk injection requested
++INJECTED from C:\Users\Art\VScode\chartsignl_80eb2710\node_modules\expo-font\android\src\main\AndroidManifest.xml
++INJECTED from C:\Users\Art\VScode\chartsignl_80eb2710\node_modules\expo-font\android\src\main\AndroidManifest.xml
++	android:targetSdkVersion
++		INJECTED from C:\Users\Art\VScode\chartsignl_80eb2710\node_modules\expo-font\android\src\main\AndroidManifest.xml
++	android:minSdkVersion
++		INJECTED from C:\Users\Art\VScode\chartsignl_80eb2710\node_modules\expo-font\android\src\main\AndroidManifest.xml
+diff --git a/node_modules/expo-font/android/build/tmp/compileReleaseJavaWithJavac/previous-compilation-data.bin b/node_modules/expo-font/android/build/tmp/compileReleaseJavaWithJavac/previous-compilation-data.bin
+new file mode 100644
+index 0000000..b083952
+Binary files /dev/null and b/node_modules/expo-font/android/build/tmp/compileReleaseJavaWithJavac/previous-compilation-data.bin differ
+diff --git a/node_modules/expo-font/android/build/tmp/kotlin-classes/release/META-INF/expo-font_release.kotlin_module b/node_modules/expo-font/android/build/tmp/kotlin-classes/release/META-INF/expo-font_release.kotlin_module
+new file mode 100644
+index 0000000..b6429b4
+Binary files /dev/null and b/node_modules/expo-font/android/build/tmp/kotlin-classes/release/META-INF/expo-font_release.kotlin_module differ
+diff --git a/node_modules/expo-font/android/build/tmp/kotlin-classes/release/expo/modules/font/FileNotFoundException.class b/node_modules/expo-font/android/build/tmp/kotlin-classes/release/expo/modules/font/FileNotFoundException.class
+new file mode 100644
+index 0000000..b6f616b
+Binary files /dev/null and b/node_modules/expo-font/android/build/tmp/kotlin-classes/release/expo/modules/font/FileNotFoundException.class differ
+diff --git a/node_modules/expo-font/android/build/tmp/kotlin-classes/release/expo/modules/font/FontLoaderModule$definition$lambda$4$$inlined$AsyncFunction$1.class b/node_modules/expo-font/android/build/tmp/kotlin-classes/release/expo/modules/font/FontLoaderModule$definition$lambda$4$$inlined$AsyncFunction$1.class
+new file mode 100644
+index 0000000..bf4cc09
+Binary files /dev/null and b/node_modules/expo-font/android/build/tmp/kotlin-classes/release/expo/modules/font/FontLoaderModule$definition$lambda$4$$inlined$AsyncFunction$1.class differ
+diff --git a/node_modules/expo-font/android/build/tmp/kotlin-classes/release/expo/modules/font/FontLoaderModule$definition$lambda$4$$inlined$AsyncFunction$2.class b/node_modules/expo-font/android/build/tmp/kotlin-classes/release/expo/modules/font/FontLoaderModule$definition$lambda$4$$inlined$AsyncFunction$2.class
+new file mode 100644
+index 0000000..08574ab
+Binary files /dev/null and b/node_modules/expo-font/android/build/tmp/kotlin-classes/release/expo/modules/font/FontLoaderModule$definition$lambda$4$$inlined$AsyncFunction$2.class differ
+diff --git a/node_modules/expo-font/android/build/tmp/kotlin-classes/release/expo/modules/font/FontLoaderModule$definition$lambda$4$$inlined$AsyncFunction$3.class b/node_modules/expo-font/android/build/tmp/kotlin-classes/release/expo/modules/font/FontLoaderModule$definition$lambda$4$$inlined$AsyncFunction$3.class
+new file mode 100644
+index 0000000..e362e24
+Binary files /dev/null and b/node_modules/expo-font/android/build/tmp/kotlin-classes/release/expo/modules/font/FontLoaderModule$definition$lambda$4$$inlined$AsyncFunction$3.class differ
+diff --git a/node_modules/expo-font/android/build/tmp/kotlin-classes/release/expo/modules/font/FontLoaderModule$definition$lambda$4$$inlined$AsyncFunction$4.class b/node_modules/expo-font/android/build/tmp/kotlin-classes/release/expo/modules/font/FontLoaderModule$definition$lambda$4$$inlined$AsyncFunction$4.class
+new file mode 100644
+index 0000000..871372c
+Binary files /dev/null and b/node_modules/expo-font/android/build/tmp/kotlin-classes/release/expo/modules/font/FontLoaderModule$definition$lambda$4$$inlined$AsyncFunction$4.class differ
+diff --git a/node_modules/expo-font/android/build/tmp/kotlin-classes/release/expo/modules/font/FontLoaderModule$definition$lambda$4$$inlined$AsyncFunction$5.class b/node_modules/expo-font/android/build/tmp/kotlin-classes/release/expo/modules/font/FontLoaderModule$definition$lambda$4$$inlined$AsyncFunction$5.class
+new file mode 100644
+index 0000000..ec0b73a
+Binary files /dev/null and b/node_modules/expo-font/android/build/tmp/kotlin-classes/release/expo/modules/font/FontLoaderModule$definition$lambda$4$$inlined$AsyncFunction$5.class differ
+diff --git a/node_modules/expo-font/android/build/tmp/kotlin-classes/release/expo/modules/font/FontLoaderModule$definition$lambda$4$$inlined$FunctionWithoutArgs$1.class b/node_modules/expo-font/android/build/tmp/kotlin-classes/release/expo/modules/font/FontLoaderModule$definition$lambda$4$$inlined$FunctionWithoutArgs$1.class
+new file mode 100644
+index 0000000..cc3ae27
+Binary files /dev/null and b/node_modules/expo-font/android/build/tmp/kotlin-classes/release/expo/modules/font/FontLoaderModule$definition$lambda$4$$inlined$FunctionWithoutArgs$1.class differ
+diff --git a/node_modules/expo-font/android/build/tmp/kotlin-classes/release/expo/modules/font/FontLoaderModule.class b/node_modules/expo-font/android/build/tmp/kotlin-classes/release/expo/modules/font/FontLoaderModule.class
+new file mode 100644
+index 0000000..4236d93
+Binary files /dev/null and b/node_modules/expo-font/android/build/tmp/kotlin-classes/release/expo/modules/font/FontLoaderModule.class differ
+diff --git a/node_modules/expo-font/android/build/tmp/kotlin-classes/release/expo/modules/font/FontLoaderModuleKt.class b/node_modules/expo-font/android/build/tmp/kotlin-classes/release/expo/modules/font/FontLoaderModuleKt.class
+new file mode 100644
+index 0000000..efa8745
+Binary files /dev/null and b/node_modules/expo-font/android/build/tmp/kotlin-classes/release/expo/modules/font/FontLoaderModuleKt.class differ
+diff --git a/node_modules/expo-font/android/build/tmp/kotlin-classes/release/expo/modules/font/FontUtilsModule$definition$lambda$3$$inlined$AsyncFunction$1.class b/node_modules/expo-font/android/build/tmp/kotlin-classes/release/expo/modules/font/FontUtilsModule$definition$lambda$3$$inlined$AsyncFunction$1.class
+new file mode 100644
+index 0000000..bc59af5
+Binary files /dev/null and b/node_modules/expo-font/android/build/tmp/kotlin-classes/release/expo/modules/font/FontUtilsModule$definition$lambda$3$$inlined$AsyncFunction$1.class differ
+diff --git a/node_modules/expo-font/android/build/tmp/kotlin-classes/release/expo/modules/font/FontUtilsModule$definition$lambda$3$$inlined$AsyncFunction$2.class b/node_modules/expo-font/android/build/tmp/kotlin-classes/release/expo/modules/font/FontUtilsModule$definition$lambda$3$$inlined$AsyncFunction$2.class
+new file mode 100644
+index 0000000..a8c4331
+Binary files /dev/null and b/node_modules/expo-font/android/build/tmp/kotlin-classes/release/expo/modules/font/FontUtilsModule$definition$lambda$3$$inlined$AsyncFunction$2.class differ
+diff --git a/node_modules/expo-font/android/build/tmp/kotlin-classes/release/expo/modules/font/FontUtilsModule$definition$lambda$3$$inlined$AsyncFunction$3.class b/node_modules/expo-font/android/build/tmp/kotlin-classes/release/expo/modules/font/FontUtilsModule$definition$lambda$3$$inlined$AsyncFunction$3.class
+new file mode 100644
+index 0000000..7cff342
+Binary files /dev/null and b/node_modules/expo-font/android/build/tmp/kotlin-classes/release/expo/modules/font/FontUtilsModule$definition$lambda$3$$inlined$AsyncFunction$3.class differ
+diff --git a/node_modules/expo-font/android/build/tmp/kotlin-classes/release/expo/modules/font/FontUtilsModule$definition$lambda$3$$inlined$AsyncFunction$4.class b/node_modules/expo-font/android/build/tmp/kotlin-classes/release/expo/modules/font/FontUtilsModule$definition$lambda$3$$inlined$AsyncFunction$4.class
+new file mode 100644
+index 0000000..a076e3e
+Binary files /dev/null and b/node_modules/expo-font/android/build/tmp/kotlin-classes/release/expo/modules/font/FontUtilsModule$definition$lambda$3$$inlined$AsyncFunction$4.class differ
+diff --git a/node_modules/expo-font/android/build/tmp/kotlin-classes/release/expo/modules/font/FontUtilsModule$definition$lambda$3$$inlined$AsyncFunction$5.class b/node_modules/expo-font/android/build/tmp/kotlin-classes/release/expo/modules/font/FontUtilsModule$definition$lambda$3$$inlined$AsyncFunction$5.class
+new file mode 100644
+index 0000000..2b87d7b
+Binary files /dev/null and b/node_modules/expo-font/android/build/tmp/kotlin-classes/release/expo/modules/font/FontUtilsModule$definition$lambda$3$$inlined$AsyncFunction$5.class differ
+diff --git a/node_modules/expo-font/android/build/tmp/kotlin-classes/release/expo/modules/font/FontUtilsModule$definition$lambda$3$$inlined$AsyncFunction$6.class b/node_modules/expo-font/android/build/tmp/kotlin-classes/release/expo/modules/font/FontUtilsModule$definition$lambda$3$$inlined$AsyncFunction$6.class
+new file mode 100644
+index 0000000..b6c7647
+Binary files /dev/null and b/node_modules/expo-font/android/build/tmp/kotlin-classes/release/expo/modules/font/FontUtilsModule$definition$lambda$3$$inlined$AsyncFunction$6.class differ
+diff --git a/node_modules/expo-font/android/build/tmp/kotlin-classes/release/expo/modules/font/FontUtilsModule$definition$lambda$3$$inlined$AsyncFunction$7.class b/node_modules/expo-font/android/build/tmp/kotlin-classes/release/expo/modules/font/FontUtilsModule$definition$lambda$3$$inlined$AsyncFunction$7.class
+new file mode 100644
+index 0000000..127149c
+Binary files /dev/null and b/node_modules/expo-font/android/build/tmp/kotlin-classes/release/expo/modules/font/FontUtilsModule$definition$lambda$3$$inlined$AsyncFunction$7.class differ
+diff --git a/node_modules/expo-font/android/build/tmp/kotlin-classes/release/expo/modules/font/FontUtilsModule.class b/node_modules/expo-font/android/build/tmp/kotlin-classes/release/expo/modules/font/FontUtilsModule.class
+new file mode 100644
+index 0000000..a0deab0
+Binary files /dev/null and b/node_modules/expo-font/android/build/tmp/kotlin-classes/release/expo/modules/font/FontUtilsModule.class differ
+diff --git a/node_modules/expo-font/android/build/tmp/kotlin-classes/release/expo/modules/font/RenderToImageOptions.class b/node_modules/expo-font/android/build/tmp/kotlin-classes/release/expo/modules/font/RenderToImageOptions.class
+new file mode 100644
+index 0000000..df1ce0b
+Binary files /dev/null and b/node_modules/expo-font/android/build/tmp/kotlin-classes/release/expo/modules/font/RenderToImageOptions.class differ
+diff --git a/node_modules/expo-font/android/build/tmp/kotlin-classes/release/expo/modules/font/SaveImageException.class b/node_modules/expo-font/android/build/tmp/kotlin-classes/release/expo/modules/font/SaveImageException.class
+new file mode 100644
+index 0000000..5df0865
+Binary files /dev/null and b/node_modules/expo-font/android/build/tmp/kotlin-classes/release/expo/modules/font/SaveImageException.class differ

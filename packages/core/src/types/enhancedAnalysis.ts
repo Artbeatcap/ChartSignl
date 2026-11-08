@@ -1,6 +1,8 @@
 // Enhanced Analysis Types for @chartsignl/core
 // These types define the structure of the enhanced technical analysis system
 
+import type { DataFreshness } from './dataFreshness';
+
 // ============================================================================
 // INDICATOR TYPES (from technical calculator)
 // ============================================================================
@@ -64,7 +66,7 @@ export interface OverextensionData {
   status: 'normal' | 'moderately_extended' | 'overextended' | 'extremely_extended';
   direction: 'above' | 'below';
   meanReversionSignal: boolean;
-  signalType: 'none' | 'pullback_expected' | 'reversal_candidate' | 'strong_reversal';
+  signalType: 'none' | 'pullback_expected' | 'reversal_candidate' | 'strong_reversal' | 'extended_in_downtrend' | 'context_unavailable';
 }
 
 export interface FibonacciLevel {
@@ -82,6 +84,10 @@ export interface FibonacciData {
   swingDirection: 'up' | 'down';
   levels: FibonacciLevel[];
   currentRetracement: number;
+  /** Additive: how the swing was chosen (pivot_sN | window_N | last_resort). */
+  swingSource?: string;
+  swingBarsAgo?: number;
+  swingRangeATR?: number | null;
 }
 
 export interface VolumeNode {
@@ -89,12 +95,20 @@ export interface VolumeNode {
   priceRangeHigh: number;
   priceMid: number;
   volumePercent: number;
+  widthATR?: number | null;
+  distanceATR?: number | null;
+  trimmed?: boolean;
 }
 
 export interface VolumeProfile {
   highVolumeNodes: VolumeNode[];
   pointOfControl: number;
   averageVolume: number;
+  valueAreaHigh?: number;
+  valueAreaLow?: number;
+  bucketCount?: number;
+  bucketSize?: number;
+  recencyHalfLifeBars?: number;
 }
 
 // ============================================================================
@@ -121,9 +135,17 @@ export interface ScoredLevel {
   zone: {
     high: number;
     low: number;
+    halfWidth?: number;
   };
   distanceFromPrice: number;
   distancePercent: number;
+  /** Ranking score = confluenceScore × proximity. UI shows confluenceScore. */
+  effectiveScore?: number;
+  relevance?: number;
+  distanceATR?: number;
+  proximityLabel?: 'at_price' | 'in_play' | 'nearby' | 'extended' | 'distant';
+  factorCount?: number;
+  mergedFrom?: number;
 }
 
 export interface ConfidenceFactor {
@@ -183,11 +205,46 @@ export interface TradeIdea {
 // MAIN ANALYSIS RESPONSE
 // ============================================================================
 
+export type MarketContext = {
+  status: 'available';
+  version: string;
+  scope: 'semiconductor_leadership';
+  asOfSession: string;
+  regime: 'risk_on' | 'neutral' | 'factor_breakdown';
+  /** OLS ratio slope as percent of starting ratio per session. */
+  smhQqqSlope20: number;
+  rspQqqSlope20: number;
+  smhAbove200: boolean;
+  qqqAbove200: boolean;
+  qqqDistributionDay: boolean;
+  qqqVolumeMultiple: number;
+} | {
+  status: 'unavailable';
+  version: string;
+  scope: 'semiconductor_leadership';
+  reason: string;
+};
+
+export interface AnalysisGuide {
+  whatIsHappening: string;
+  /** Only present for symbols the sector rule covers. */
+  marketContext?: string;
+  whatToWatch: string[];
+  whatWouldChange: string;
+  whenToReassess: string;
+  scoreMeaning: string;
+}
+
 export interface EnhancedAIAnalysis {
+  /** Optional for compatibility with previously saved analyses. */
+  marketContext?: MarketContext;
+  guide?: AnalysisGuide;
   // Metadata
   symbol: string;
   timeframe: string;
   analyzedAt: string;
+  /** Freshness of the price data this analysis was computed from. */
+  freshness?: DataFreshness;
 
   // Price info
   currentPrice: number;

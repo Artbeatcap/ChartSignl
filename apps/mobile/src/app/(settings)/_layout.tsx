@@ -12,10 +12,11 @@ export default function SettingsLayout() {
       }}
     >
       <Stack.Screen name="edit-profile" />
+      <Stack.Screen name="change-password" />
       <Stack.Screen name="notifications" />
       <Stack.Screen name="help" />
-      <Stack.Screen name="privacy" />
       <Stack.Screen name="terms" />
+      <Stack.Screen name="data-disclosures" />
     </Stack>
   );
 }

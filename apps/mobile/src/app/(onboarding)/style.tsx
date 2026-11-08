@@ -1,10 +1,11 @@
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Button, ProgressIndicator } from '../../components';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { colors, typography, spacing, borderRadius, shadows } from '../../theme';
 import type { TradingStyle } from '@chartsignl/core';
-import { TRADING_STYLE_OPTIONS } from '@chartsignl/core';
+import { MARKET_DATA_DELAY_MINUTES, TRADING_STYLE_OPTIONS } from '@chartsignl/core';
 
 export default function StyleScreen() {
   const router = useRouter();
@@ -62,6 +63,11 @@ export default function StyleScreen() {
                   {style.label}
                 </Text>
                 <Text style={styles.optionDescription}>{style.description}</Text>
+                {style.value === 'day' ? (
+                  <Text style={styles.optionHelper}>
+                    Levels and structure, on {MARKET_DATA_DELAY_MINUTES}-minute delayed prices.
+                  </Text>
+                ) : null}
               </View>
               {answers.tradingStyle === style.value && (
                 <View style={styles.checkmark}>
@@ -93,15 +99,16 @@ const WEB_MAX_WIDTH = 800;
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
+    ...(Platform.OS !== 'web' && { flex: 1 }),
+    ...(Platform.OS === 'web' && { height: '100vh', overflow: 'auto' }),
     backgroundColor: colors.background,
   },
   webWrapper: {
-    flex: 1,
+    ...(Platform.OS !== 'web' && { flex: 1 }),
     ...(Platform.OS === 'web' && { alignItems: 'center' }),
   },
   webInner: {
-    flex: 1,
+    ...(Platform.OS !== 'web' && { flex: 1 }),
     width: '100%',
     ...(Platform.OS === 'web' && { maxWidth: WEB_MAX_WIDTH }),
   },
@@ -122,7 +129,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.xl,
+    paddingBottom: Platform.OS === 'web' ? spacing.xxl * 3 : spacing.xl,
   },
   titleSection: {
     marginBottom: spacing.xl,
@@ -171,6 +178,11 @@ const styles = StyleSheet.create({
   optionDescription: {
     ...typography.bodySm,
     color: colors.neutral[500],
+  },
+  optionHelper: {
+    ...typography.labelSm,
+    color: colors.primary[700],
+    marginTop: 4,
   },
   checkmark: {
     width: 24,

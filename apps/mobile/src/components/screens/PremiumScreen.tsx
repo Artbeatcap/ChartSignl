@@ -1,9 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   ScrollView,
   Alert,
   ActivityIndicator,
@@ -11,13 +10,16 @@ import {
   Linking,
   TouchableOpacity,
 } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter, useLocalSearchParams, useRootNavigationState } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import type { PurchasesOffering, PurchasesPackage } from 'react-native-purchases';
 import { Card, Button } from '../index';
 import { useAuthStore } from '../../store/authStore';
 import { subscriptionService } from '../../services/subscription.service';
+import * as api from '../../lib/api';
 import { colors, typography, spacing, borderRadius, shadows } from '../../theme';
+import { MARKET_DATA_DELAY_MINUTES } from '@chartsignl/core';
 
 interface PremiumFeature {
   icon: keyof typeof Ionicons.glyphMap;
@@ -35,7 +37,7 @@ const PREMIUM_FEATURES: PremiumFeature[] = [
   {
     icon: 'infinite',
     title: 'Unlimited Atlas Analyses',
-    description: 'Get unlimited AI-powered level detection',
+    description: 'Unlimited forecast + key level detection in one tap',
   },
   {
     icon: 'layers',
@@ -66,7 +68,7 @@ const PREMIUM_FEATURES: PremiumFeature[] = [
 
 const COMPARISON_DATA: ComparisonItem[] = [
   {
-    feature: 'Weekly Analyses',
+    feature: 'Weekly Atlas runs',
     free: '3 per week',
     premium: 'Unlimited',
   },
@@ -99,42 +101,87 @@ const COMPARISON_DATA: ComparisonItem[] = [
 
 export default function PremiumScreen() {
   const router = useRouter();
+  const navigationState = useRootNavigationState();
   const params = useLocalSearchParams<{ success?: string; canceled?: string }>();
-  const { refreshSubscription, user, isPremium } = useAuthStore();
+  const { refreshSubscription, user, isPremium, session, isInitialized, isLoading: authLoading } = useAuthStore();
   const [offerings, setOfferings] = useState<PurchasesOffering | null>(null);
   const [selectedPackage, setSelectedPackage] = useState<PurchasesPackage | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
+  const [confirmingAfterCheckout, setConfirmingAfterCheckout] = useState(false);
+  const successHandledRef = useRef(false);
 
   useEffect(() => {
+    // Temporary diagnostic: RevenueCat Android key when Premium mounts (check Logcat)
+    console.log('RC Android Key:', process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_KEY ? 'SET' : 'MISSING');
     loadOfferings();
   }, []);
 
-  // Handle Stripe redirect query params
+  // Handle Stripe redirect query params — wait for user so refreshSubscription can run
   useEffect(() => {
+    if (!navigationState?.key) return;
+
     if (params.success === 'true') {
-      // Refresh subscription status after successful payment
-      refreshSubscription().then(() => {
+      const currentUser = user ?? session?.user;
+      if (!currentUser) return;
+      if (successHandledRef.current) return;
+      successHandledRef.current = true;
+
+      setConfirmingAfterCheckout(true);
+
+      const confirmSubscription = (retries = 0): Promise<void> => {
+        const maxRetries = 3;
+        const retryDelayMs = 1500;
+        return refreshSubscription().then((isActive) => {
+          if (isActive) {
+            setConfirmingAfterCheckout(false);
+            router.replace('/(tabs)/analyze');
+            Alert.alert(
+              'Welcome to Premium! 🎉',
+              'Your subscription is now active. Enjoy unlimited access to all premium features!',
+              [{ text: 'Get Started' }]
+            );
+            return;
+          }
+          if (retries < maxRetries) {
+            return new Promise((resolve) => setTimeout(resolve, retryDelayMs)).then(() =>
+              confirmSubscription(retries + 1)
+            );
+          }
+          setConfirmingAfterCheckout(false);
+          router.replace('/(tabs)/analyze');
+          Alert.alert(
+            'Payment Received',
+            'Your subscription may take a moment to activate. If the screen does not update, refresh the page.',
+            [{ text: 'OK' }]
+          );
+        });
+      };
+
+      confirmSubscription().catch((err) => {
+        console.error('Error confirming subscription:', err);
+        setConfirmingAfterCheckout(false);
+        router.replace('/(tabs)/analyze');
         Alert.alert(
-          'Welcome to Premium! 🎉',
-          'Your subscription is now active. Enjoy unlimited access to all premium features!',
-          [{ text: 'Get Started', onPress: () => router.back() }]
+          'Subscription Updated',
+          'There was a delay confirming your subscription. If you don\'t see Premium access, refresh the page.',
+          [{ text: 'OK' }]
         );
       });
-      // Clear the query param
-      router.replace('/premium');
-    } else if (params.canceled === 'true') {
+      return;
+    }
+
+    if (params.canceled === 'true') {
       Alert.alert(
         'Checkout Canceled',
         'Your subscription was not completed. You can try again anytime.',
         [{ text: 'OK' }]
       );
-      // Clear the query param
       router.replace('/premium');
     }
-  }, [params.success, params.canceled]);
+  }, [params.success, params.canceled, navigationState?.key, user?.id, session?.user?.id]);
 
   const loadOfferings = async () => {
     try {
@@ -147,11 +194,11 @@ export default function PremiumScreen() {
         return; // No RevenueCat on web
       }
       
-      // Only load RevenueCat on mobile
-      const Purchases = (await import('react-native-purchases')).default;
-      const offeringsData = await Purchases.getOfferings();
+      // Use subscription service so RevenueCat is configured before getOfferings
+      await subscriptionService.initialize();
+      const offeringsData = await subscriptionService.getOfferings();
       
-      if (offeringsData.current !== null) {
+      if (offeringsData?.current != null) {
         setOfferings(offeringsData.current);
         const monthlyPackage = offeringsData.current.availablePackages.find(
           (pkg) => pkg.identifier === '$rc_monthly' || pkg.packageType === 'MONTHLY'
@@ -188,8 +235,24 @@ export default function PremiumScreen() {
   };
 
   const handlePurchase = async () => {
-    if (!user) {
-      Alert.alert('Error', 'You must be logged in to purchase a subscription.');
+    // Check if we have a session but user is not yet loaded - try to get user from session
+    let currentUser = user;
+    if (!currentUser && session?.user) {
+      currentUser = session.user;
+    }
+    
+    if (!currentUser) {
+      Alert.alert(
+        'Login Required',
+        'You must be logged in to purchase a subscription. Please sign in or create an account first.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { 
+            text: 'Sign In', 
+            onPress: () => router.replace('/(onboarding)/account')
+          }
+        ]
+      );
       return;
     }
 
@@ -197,20 +260,38 @@ export default function PremiumScreen() {
     if (Platform.OS === 'web') {
       try {
         setIsPurchasing(true);
-        const result = await subscriptionService.purchaseSubscription(undefined, user.id);
-        if (result.checkoutUrl) {
+        const token = session?.access_token ?? null;
+        const result = await subscriptionService.purchaseSubscription(undefined, currentUser.id, token);
+        const checkoutUrl = result?.checkoutUrl;
+        if (checkoutUrl && typeof checkoutUrl === 'string') {
           // Redirect to Stripe checkout
-          await Linking.openURL(result.checkoutUrl);
+          if (typeof window !== 'undefined') {
+            window.location.assign(checkoutUrl);
+          } else {
+            await Linking.openURL(checkoutUrl);
+          }
         } else {
-          Alert.alert('Error', 'Failed to create checkout session. Please try again.');
+          Alert.alert(
+            'Checkout Error',
+            'Failed to create checkout session. Please try again or contact support if the problem persists.',
+            [{ text: 'OK' }]
+          );
         }
       } catch (error: any) {
         console.error('Purchase error:', error);
-        Alert.alert(
-          'Purchase Failed',
-          error.message || 'An error occurred during purchase. Please try again.',
-          [{ text: 'OK' }]
-        );
+        const errorMessage = error?.message || error?.error || 'An error occurred during purchase.';
+        
+        // Provide more specific error messages
+        let userMessage = 'An error occurred during purchase. Please try again.';
+        if (errorMessage.includes('authorization') || errorMessage.includes('token')) {
+          userMessage = 'Your session has expired. Please sign in again and try again.';
+        } else if (errorMessage.includes('network') || errorMessage.includes('fetch')) {
+          userMessage = 'Network error. Please check your connection and try again.';
+        } else if (errorMessage) {
+          userMessage = errorMessage;
+        }
+        
+        Alert.alert('Purchase Failed', userMessage, [{ text: 'OK' }]);
       } finally {
         setIsPurchasing(false);
       }
@@ -225,11 +306,12 @@ export default function PremiumScreen() {
 
     try {
       setIsPurchasing(true);
-      const Purchases = (await import('react-native-purchases')).default;
-      await Purchases.logIn(user.id);
-      const purchaseResult = await Purchases.purchasePackage(selectedPackage);
-      
-      if (purchaseResult.customerInfo.entitlements.active['premium']) {
+      const result = await subscriptionService.purchaseSubscription(
+        selectedPackage,
+        user.id,
+        session?.access_token ?? undefined
+      );
+      if (result.success) {
         await refreshSubscription();
         Alert.alert(
           'Welcome to Premium! 🎉',
@@ -241,7 +323,7 @@ export default function PremiumScreen() {
       }
     } catch (error: any) {
       console.error('Purchase error:', error);
-      if (error.userCancelled) return;
+      if (error?.userCancelled || error?.message === 'Purchase cancelled') return;
       Alert.alert(
         'Purchase Failed',
         error.message || 'An error occurred during purchase. Please try again.',
@@ -268,14 +350,11 @@ export default function PremiumScreen() {
       return;
     }
 
-    // Mobile: Use RevenueCat
+    // Mobile: Use subscription service (same configured RevenueCat instance)
     try {
       setIsRestoring(true);
-      const Purchases = (await import('react-native-purchases')).default;
-      await Purchases.logIn(user.id);
-      const customerInfo = await Purchases.restorePurchases();
-      
-      if (customerInfo.entitlements.active['premium']) {
+      const hasPremium = await subscriptionService.restorePurchases(user.id);
+      if (hasPremium) {
         await refreshSubscription();
         Alert.alert(
           'Purchases Restored',
@@ -310,13 +389,24 @@ export default function PremiumScreen() {
         // Open Google Play subscription management
         await Linking.openURL('https://play.google.com/store/account/subscriptions');
       } else if (Platform.OS === 'web') {
-        // Web: Stripe subscriptions are managed via Stripe customer portal
-        // For now, show a message. Can add customer portal endpoint later if needed
-        Alert.alert(
-          'Manage Subscription',
-          'To manage your subscription, please contact support or check your email for subscription management links from Stripe.',
-          [{ text: 'OK' }]
-        );
+        // Web: Open Stripe Customer Portal
+        setIsCancelling(true);
+        try {
+          const token = session?.access_token;
+          const response = await api.createCustomerPortalSession(token);
+          
+          if (response.success && response.url) {
+            // Redirect to Stripe Customer Portal
+            window.location.href = response.url;
+          } else {
+            window.alert(`Unable to open subscription management. ${response.error || 'Please try again'}\n\nContact support@chartsignl.com if this continues.`);
+          }
+        } catch (portalError) {
+          console.error('Error creating portal session:', portalError);
+          window.alert(`Unable to open subscription management. ${(portalError as Error).message || 'Unknown error'}\n\nContact support@chartsignl.com if this continues.`);
+        } finally {
+          setIsCancelling(false);
+        }
       } else {
         // Fallback
         Alert.alert(
@@ -327,24 +417,22 @@ export default function PremiumScreen() {
       }
     } catch (error) {
       console.error('Error opening subscription management:', error);
-      Alert.alert(
-        'Error',
-        'Unable to open subscription management. Please go to your device\'s Settings > Subscriptions to manage your subscription.',
-        [{ text: 'OK' }]
-      );
+      if (Platform.OS === 'web') {
+        window.alert('Unable to open subscription management. Please try again.');
+      } else {
+        Alert.alert(
+          'Error',
+          'Unable to open subscription management. Please go to your device\'s Settings > Subscriptions to manage your subscription.',
+          [{ text: 'OK' }]
+        );
+      }
     }
   };
 
   const handleCancelSubscription = () => {
     if (Platform.OS === 'web') {
-      Alert.alert(
-        'Cancel Subscription',
-        'To cancel your subscription, please use the "Manage Subscription" option or contact support.',
-        [
-          { text: 'Not Now', style: 'cancel' },
-          { text: 'Manage Subscription', onPress: handleManageSubscription },
-        ]
-      );
+      // Web: Redirect to Stripe Customer Portal for self-service cancellation
+      handleManageSubscription();
     } else {
       Alert.alert(
         'Cancel Subscription',
@@ -362,7 +450,11 @@ export default function PremiumScreen() {
   };
 
   const handlePrivacyPress = () => {
-    router.push('/(settings)/privacy');
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.location.href = '/privacy';
+    } else {
+      Linking.openURL('https://chartsignl.com/privacy');
+    }
   };
 
   const renderComparisonRow = (item: ComparisonItem, index: number) => {
@@ -396,13 +488,34 @@ export default function PremiumScreen() {
         <View style={styles.webWrapper}>
           <View style={styles.webInner}>
             <View style={styles.topHeader}>
-              <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                <Ionicons name="arrow-back" size={24} color={colors.neutral[600]} />
+              <TouchableOpacity onPress={() => router.push('/(tabs)/profile')} style={styles.backButton}>
+                <Text style={styles.backText}>← Back</Text>
               </TouchableOpacity>
             </View>
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color={colors.primary[500]} />
               <Text style={styles.loadingText}>Loading...</Text>
+            </View>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // After Stripe redirect: show confirming until we've refreshed and got isPremium
+  if (confirmingAfterCheckout) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.webWrapper}>
+          <View style={styles.webInner}>
+            <View style={styles.topHeader}>
+              <TouchableOpacity onPress={() => router.push('/(tabs)/profile')} style={styles.backButton}>
+                <Text style={styles.backText}>← Back</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={colors.primary[500]} />
+              <Text style={styles.loadingText}>Confirming your subscription...</Text>
             </View>
           </View>
         </View>
@@ -417,8 +530,8 @@ export default function PremiumScreen() {
         <View style={styles.webWrapper}>
           <View style={styles.webInner}>
             <View style={styles.topHeader}>
-              <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                <Ionicons name="arrow-back" size={24} color={colors.neutral[600]} />
+              <TouchableOpacity onPress={() => router.push('/(tabs)/profile')} style={styles.backButton}>
+                <Text style={styles.backText}>← Back</Text>
               </TouchableOpacity>
             </View>
             <ScrollView
@@ -501,12 +614,12 @@ export default function PremiumScreen() {
 
   // Non-premium user view - show upgrade options
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.webWrapper}>
-        <View style={styles.webInner}>
+      <SafeAreaView style={styles.container}>
+        <View style={styles.webWrapper}>
+          <View style={styles.webInner}>
           <View style={styles.topHeader}>
-            <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-              <Ionicons name="arrow-back" size={24} color={colors.neutral[600]} />
+            <TouchableOpacity onPress={() => router.push('/(tabs)/profile')} style={styles.backButton}>
+              <Text style={styles.backText}>← Back</Text>
             </TouchableOpacity>
           </View>
           <ScrollView
@@ -519,7 +632,7 @@ export default function PremiumScreen() {
           <View style={styles.iconContainer}>
             <Ionicons name="star" size={48} color={colors.primary[500]} />
           </View>
-          <Text style={styles.title}>Upgrade to Premium</Text>
+          <Text style={styles.title}>Upgrade to Pro</Text>
           <Text style={styles.subtitle}>
             Unlock unlimited analysis for just $4.99/month
           </Text>
@@ -550,6 +663,10 @@ export default function PremiumScreen() {
               </View>
             </View>
           ))}
+          <Text style={styles.dataNote}>
+            Market data is delayed at least {MARKET_DATA_DELAY_MINUTES} minutes. Pro unlocks
+            unlimited analyses, not faster data.
+          </Text>
         </Card>
 
         {/* Subscription Plan */}
@@ -638,15 +755,16 @@ const WEB_MAX_WIDTH = 900;
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
+    ...(Platform.OS !== 'web' && { flex: 1 }),
+    ...(Platform.OS === 'web' && { height: '100vh', overflow: 'auto' }),
     backgroundColor: colors.background,
   },
   webWrapper: {
-    flex: 1,
+    ...(Platform.OS !== 'web' && { flex: 1 }),
     ...(Platform.OS === 'web' && { alignItems: 'center' }),
   },
   webInner: {
-    flex: 1,
+    ...(Platform.OS !== 'web' && { flex: 1 }),
     width: '100%',
     ...(Platform.OS === 'web' && { maxWidth: WEB_MAX_WIDTH }),
   },
@@ -657,15 +775,18 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
   },
   backButton: {
-    padding: spacing.xs,
-    marginLeft: -spacing.xs,
+    minWidth: 60,
+  },
+  backText: {
+    ...typography.bodyMd,
+    color: colors.primary[600],
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
     paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.xxl,
+    paddingBottom: Platform.OS === 'web' ? spacing.xxl * 3 : spacing.xxl,
   },
   loadingContainer: {
     flex: 1,
@@ -800,6 +921,12 @@ const styles = StyleSheet.create({
   featureDescription: {
     ...typography.bodySm,
     color: colors.neutral[500],
+    lineHeight: 20,
+  },
+  dataNote: {
+    ...typography.bodySm,
+    color: colors.neutral[500],
+    marginTop: spacing.md,
     lineHeight: 20,
   },
   // Current plan styles (for premium users)

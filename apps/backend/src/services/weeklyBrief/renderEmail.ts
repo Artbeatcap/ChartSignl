@@ -1,0 +1,395 @@
+import type { WeeklyBrand, WeeklyContent } from './types.js';
+import {
+  CHARTSIGNL_BRAND,
+  EMAIL_BORDER,
+  EMAIL_INK,
+  EMAIL_MUTED,
+  EMAIL_PAGE_BG,
+  EMAIL_SURFACE,
+} from './brand.js';
+import { EMAIL_FONT, emailClientCss } from '../briefShared/emailCss.js';
+import {
+  analyzeHref,
+  clipPreheader,
+  displayCompanyName,
+  signedPercent,
+  weekAheadSpan,
+} from '../briefShared/emailText.js';
+import { sanitizeAiField, sanitizeDailySections } from '../../lib/briefSanitize.js';
+
+export interface RenderEmailOptions {
+  content: WeeklyContent;
+  brand?: WeeklyBrand;
+  preheader?: string;
+  unsubscribeUrl: string;
+  preferencesUrl?: string;
+}
+
+function pctColor(pct: number | null, brand: WeeklyBrand): string {
+  if (pct === null) return EMAIL_MUTED;
+  if (pct < 0) return brand.resistance;
+  if (pct > 0) return brand.support;
+  return EMAIL_MUTED;
+}
+
+function formatPct(pct: number | null): string {
+  if (pct === null) return '—';
+  const sign = pct > 0 ? '+' : '';
+  return `${sign}${pct.toFixed(2)}%`;
+}
+
+function sectorPctColor(pct: number, brand: WeeklyBrand): string {
+  if (pct < 0) return brand.resistance;
+  if (pct > 0) return brand.support;
+  return '#7b8aa3';
+}
+
+function moverDirColor(dir: string, brand: WeeklyBrand): string {
+  return dir === 'down' ? brand.resistance : brand.support;
+}
+
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function renderTape(content: WeeklyContent, brand: WeeklyBrand): string {
+  if (!content.tape?.length) return '';
+
+  const cells = content.tape.map((t) => {
+    const color = pctColor(t.pct, brand);
+    const change = t.pct === null
+      ? ''
+      : `<div class="tape-pct" style="font-size:13px;font-weight:700;margin-top:2px;color:${color};">${formatPct(t.pct)}</div>`;
+    const symbol = escapeHtml(t.symbol);
+    return `
+                <td class="tape-cell" width="50%" valign="top" style="padding:6px;font-family:${EMAIL_FONT};">
+                  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${EMAIL_SURFACE};border:1px solid ${EMAIL_BORDER};border-radius:10px;">
+                    <tr>
+                      <td style="padding:12px 14px;">
+                        <div class="tape-sym" style="font-size:12px;font-weight:700;color:${EMAIL_MUTED};letter-spacing:0.06em;"><a href="${analyzeHref(t.symbol)}" style="color:${EMAIL_MUTED};text-decoration:none;">${symbol}</a></div>
+                        <div class="tape-price" style="font-size:18px;font-weight:800;color:${EMAIL_INK};margin-top:2px;">${escapeHtml(t.price)}</div>
+                        ${change}
+                      </td>
+                    </tr>
+                  </table>
+                </td>`;
+  });
+  const rows: string[] = [];
+  for (let i = 0; i < cells.length; i += 2) {
+    rows.push(`<tr>${cells[i]}${cells[i + 1] ?? '<td width="50%"></td>'}</tr>`);
+  }
+
+  return `
+        <tr>
+          <td class="tape-wrap" style="background:#ffffff;padding:8px 16px 18px 16px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+              ${rows.join('')}
+            </table>
+            <div style="font-size:11px;color:${EMAIL_MUTED};text-align:center;padding-top:6px;font-family:${EMAIL_FONT};">Weekly change · Mon→Fri close</div>
+          </td>
+        </tr>`;
+}
+
+function renderSectors(content: WeeklyContent, brand: WeeklyBrand): string {
+  if (!content.sectors?.length) return '';
+
+  const rows = content.sectors
+    .map(
+      (s) => `
+              <tr>
+                <td style="padding:9px 0;border-bottom:1px solid #f0f2f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+                  <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+                    <td align="left" style="font-size:14px;color:#3a4658;">
+                      <span class="sector-name" style="font-weight:600;color:#1a2230;">${escapeHtml(s.name)}</span>
+                      <span style="color:#9aa6b5;font-size:12px;"> · ${escapeHtml(s.etf)}</span>
+                    </td>
+                    <td align="right" width="72">
+                      <span style="display:inline-block;min-width:64px;text-align:right;font-size:14px;font-weight:700;color:${sectorPctColor(s.pct, brand)};">${formatPct(s.pct)}</span>
+                    </td>
+                  </tr></table>
+                </td>
+              </tr>`
+    )
+    .join('');
+
+  return `
+        <tr>
+          <td class="px" style="padding-top:28px;">
+            <div class="sec-title" style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;border-bottom:2px solid #eef1f6;padding-bottom:8px;margin-bottom:14px;">Sector Scorecard</div>
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0">${rows}
+            </table>
+          </td>
+        </tr>`;
+}
+
+function renderMovers(content: WeeklyContent, brand: WeeklyBrand): string {
+  if (!content.movers?.length) return '';
+
+  const cards = content.movers
+    .map(
+      (m) => `
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:10px;background:#fafbfc;border:1px solid #eef1f6;border-radius:10px;">
+              <tr>
+                <td style="padding:13px 16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+                  <a href="${analyzeHref(m.ticker)}" style="font-size:15px;font-weight:800;color:#0b1220;text-decoration:none;">$${escapeHtml(m.ticker)}</a>
+                  <span style="font-size:14px;font-weight:700;margin-left:8px;color:${moverDirColor(m.dir, brand)};">${escapeHtml(m.pct)}</span>
+                  ${m.windowLabel ? `<span style="display:inline-block;font-size:10px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;padding:2px 6px;border-radius:4px;background:#F5F5F4;color:#78716C;margin-left:8px;">${escapeHtml(m.windowLabel)}</span>` : ''}
+                  ${m.companyName ? `<span style="font-size:13px;color:#78716C;margin-left:8px;">${escapeHtml(displayCompanyName(m.companyName))}</span>` : ''}
+                  ${m.why ? `<div style="font-size:14px;line-height:1.5;color:#4a586b;margin-top:5px;">${escapeHtml(m.why)}</div>` : ''}
+                </td>
+              </tr>
+            </table>`
+    )
+    .join('');
+
+  return `
+        <tr>
+          <td class="px" style="padding-top:28px;">
+            <div class="sec-title" style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;border-bottom:2px solid #eef1f6;padding-bottom:8px;margin-bottom:14px;">Notable Movers</div>
+            ${cards}
+          </td>
+        </tr>`;
+}
+
+function renderLevels(content: WeeklyContent, brand: WeeklyBrand): string {
+  if (!content.levels || Object.keys(content.levels).length === 0) return '';
+
+  const levelCards = Object.entries(content.levels)
+    .map(
+      ([sym, d]) => `
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:10px;background:${EMAIL_SURFACE};border:1px solid ${EMAIL_BORDER};border-radius:10px;">
+              <tr>
+                <td style="padding:14px 16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+                  <div style="font-size:13px;font-weight:800;color:${brand.accent};letter-spacing:0.06em;margin-bottom:8px;"><a href="${analyzeHref(sym)}" style="color:${brand.accent};text-decoration:none;">${escapeHtml(sym.toUpperCase())}</a>${d.pivot ? ` · pivot ${escapeHtml(d.pivot)}` : ''}</div>
+                  <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+                    <td class="level-col" width="50%" style="vertical-align:top;padding-right:8px;">
+                      <div style="font-size:11px;color:${EMAIL_MUTED};text-transform:uppercase;letter-spacing:0.08em;">Support</div>
+                      <div style="font-size:14px;color:${brand.support};font-weight:600;margin-top:3px;">${escapeHtml(d.support)}${d.support2 ? `<br>${escapeHtml(d.support2)}` : ''}</div>
+                    </td>
+                    <td class="level-col" width="50%" style="vertical-align:top;">
+                      <div style="font-size:11px;color:${EMAIL_MUTED};text-transform:uppercase;letter-spacing:0.08em;">Resistance</div>
+                      <div style="font-size:14px;color:${brand.resistance};font-weight:600;margin-top:3px;">${escapeHtml(d.resistance)}${d.resistance2 ? `<br>${escapeHtml(d.resistance2)}` : ''}</div>
+                    </td>
+                  </tr></table>
+                </td>
+              </tr>
+            </table>`
+    )
+    .join('');
+
+  const keyLevelNote = content.sections.key_level_note
+    ? `<div style="font-size:15px;line-height:1.55;color:#1f2733;margin-top:4px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;"><strong style="color:#0b1220;">The line that matters:</strong> ${escapeHtml(content.sections.key_level_note)}</div>`
+    : '';
+
+  return `
+        <tr>
+          <td class="px" style="padding-top:28px;">
+            <div class="sec-title" style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;border-bottom:2px solid #eef1f6;padding-bottom:8px;margin-bottom:14px;">Levels for the Week</div>
+            ${levelCards}
+            ${keyLevelNote}
+          </td>
+        </tr>`;
+}
+
+function renderBulletRows(
+  bullets: WeeklyContent['week_ahead_bullets'],
+  brand: WeeklyBrand,
+  emptyWhy = ''
+): string {
+  return (bullets || [])
+    .map((b) => {
+      const why = b.why?.trim() || emptyWhy;
+      return `
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:8px;">
+              <tr>
+                <td class="date-cell" width="72" style="vertical-align:top;padding-right:10px;font-family:${EMAIL_FONT};">
+                  <span style="display:inline-block;background:#e6faf7;color:${brand.accentLight};font-size:11px;font-weight:700;padding:4px 8px;border-radius:6px;white-space:nowrap;">${escapeHtml(b.date)}</span>
+                </td>
+                <td class="event-cell" style="vertical-align:top;font-size:14px;line-height:1.5;color:#2a3645;font-family:${EMAIL_FONT};">
+                  <strong style="color:#0b1220;">${escapeHtml(b.event)}</strong>${why ? ` — <span style="color:#5a6b80;">${escapeHtml(why)}</span>` : ''}
+                </td>
+              </tr>
+            </table>`;
+    })
+    .join('');
+}
+
+function renderWeekAhead(content: WeeklyContent, brand: WeeklyBrand): string {
+  const hasBullets = content.week_ahead_bullets?.length;
+  const hasHtml = content.sections.week_ahead_html;
+  const earnings = content.earnings_bullets || [];
+  if (!hasBullets && !hasHtml && !earnings.length) return '';
+
+  const htmlBlock = hasHtml
+    ? `<div class="body-text" style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:16px;line-height:1.62;color:#44403C;margin-bottom:12px;">${content.sections.week_ahead_html}</div>`
+    : '';
+
+  const earningsBlock = earnings.length
+    ? `<div style="font-size:12px;color:#7b8aa3;text-transform:uppercase;letter-spacing:0.08em;margin:16px 0 8px;font-family:${EMAIL_FONT};">Earnings on deck</div>${renderBulletRows(earnings, brand, 'Time TBA')}`
+    : '';
+
+  return `
+        <tr>
+          <td class="px" style="padding-top:28px;">
+            <div class="sec-title" style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;border-bottom:2px solid #eef1f6;padding-bottom:8px;margin-bottom:14px;">The Week Ahead</div>
+            ${htmlBlock}
+            ${renderBulletRows(content.week_ahead_bullets, brand)}
+            ${earningsBlock}
+          </td>
+        </tr>`;
+}
+
+export function buildPreheader(content: WeeklyContent, maxLen = 90): string {
+  return clipPreheader(sanitizeAiField(content.sections.major_driver || ''), maxLen);
+}
+
+export function renderWeeklyBriefEmail(options: RenderEmailOptions): string {
+  const brand = options.brand ?? CHARTSIGNL_BRAND;
+  const content: WeeklyContent = {
+    ...options.content,
+    sections: sanitizeDailySections(options.content.sections),
+  };
+  const preheader = options.preheader ?? buildPreheader(content);
+  const preferencesUrl = options.preferencesUrl ?? brand.appUrl;
+
+  const majorDriver = content.sections.major_driver
+    ? `
+        <tr>
+          <td class="px" style="padding-top:28px;padding-bottom:4px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f0fdfa;border-left:4px solid ${brand.accent};border-radius:10px;">
+              <tr>
+                <td style="padding:18px 20px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+                  <div class="kicker" style="color:${brand.accent};margin-bottom:8px;">What drove the week</div>
+                  <div style="font-size:16px;line-height:1.55;color:#1a2230;font-weight:500;">${escapeHtml(content.sections.major_driver)}</div>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>`
+    : '';
+
+  const weekInReview = content.sections.week_in_review_html
+    ? `
+        <tr>
+          <td class="px" style="padding-top:26px;">
+            <div class="sec-title" style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;border-bottom:2px solid #eef1f6;padding-bottom:8px;margin-bottom:14px;">Last Week in Review</div>
+            <div class="body-text" style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:16px;line-height:1.62;color:#44403C;">${content.sections.week_in_review_html}</div>
+          </td>
+        </tr>`
+    : '';
+
+  const biggestRisk = content.sections.biggest_risk
+    ? `
+        <tr>
+          <td class="px" style="padding-top:26px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#fff7f8;border-left:4px solid ${brand.resistance};border-radius:10px;">
+              <tr>
+                <td style="padding:18px 20px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+                  <div class="kicker" style="color:${brand.resistance};margin-bottom:8px;">The biggest risk</div>
+                  <div style="font-size:16px;line-height:1.55;color:#1a2230;font-weight:500;">${escapeHtml(content.sections.biggest_risk)}</div>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>`
+    : '';
+
+  const staleNote = content.data_stale
+    ? `<div style="font-size:12px;color:#b06a00;background:#fff8e6;border:1px solid #ffe2a8;border-radius:8px;padding:10px 12px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">Some market data was unavailable at generation time; affected sections were omitted rather than estimated.</div>`
+    : '';
+
+  return `<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="x-apple-disable-message-reformatting">
+  <title>${escapeHtml(brand.name)} — Weekly Brief — ${escapeHtml(content.week_label)}</title>
+  <style>${emailClientCss(brand)}
+  </style>
+</head>
+<body style="margin:0;padding:0;background:${EMAIL_PAGE_BG};">
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;height:0;width:0;">
+    ${escapeHtml(preheader)}&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;
+  </div>
+
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${EMAIL_PAGE_BG};">
+    <tr><td class="email-shell" align="center" style="padding:24px 8px;">
+      <table class="email-wrap" role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;max-width:640px;background:#ffffff;border:1px solid ${EMAIL_BORDER};border-radius:16px;overflow:hidden;font-family:${EMAIL_FONT};">
+
+        <tr>
+          <td class="header-pad" style="background:${brand.headerGradientStart};background-image:linear-gradient(180deg,${brand.headerGradientStart} 0%,${brand.headerGradientEnd} 100%);padding:30px 28px 24px 28px;border-bottom:1px solid ${EMAIL_BORDER};">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+              <tr>
+                <td align="left" style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+                  <div class="kicker" style="color:${brand.accent};">${escapeHtml(brand.name)} · Weekly Brief</div>
+                  <div class="h1" style="color:${EMAIL_INK};margin-top:8px;">The Week in Markets</div>
+                  <div class="muted" style="color:${EMAIL_MUTED};margin-top:6px;font-size:13px;">${escapeHtml(content.week_label)}</div>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        ${renderTape(content, brand)}
+        ${majorDriver}
+        ${weekInReview}
+        ${renderSectors(content, brand)}
+        ${renderMovers(content, brand)}
+        ${renderLevels(content, brand)}
+        ${renderWeekAhead(content, brand)}
+        ${biggestRisk}
+
+        <tr>
+          <td class="px" style="padding-top:30px;padding-bottom:6px;" align="center">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+              <tr>
+                <td align="center" style="border-radius:10px;background:${brand.cta};">
+                  <a class="cta-btn" href="${escapeHtml(brand.chartsUrl || brand.appUrl)}" style="display:inline-block;padding:14px 22px;font-family:${EMAIL_FONT};font-size:15px;font-weight:700;color:#ffffff;border-radius:10px;line-height:1.3;text-align:center;">Pull these levels up on live charts →</a>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <tr>
+          <td class="px" style="padding-top:24px;">
+            ${staleNote}
+            <div class="muted" style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;margin-top:14px;font-size:12px;line-height:1.55;color:#9aa6b5;">
+              Educational market commentary, not financial advice. Levels and scenarios are analytical, not trade instructions. Figures reflect data available at ${escapeHtml(content.generated_at)}.
+            </div>
+          </td>
+        </tr>
+
+        <tr>
+          <td class="footer-pad" style="padding:22px 28px 30px 28px;border-top:1px solid #eef1f6;">
+            <div style="font-size:13px;color:#8a97a8;text-align:center;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+              <strong style="color:#5a6b80;">${escapeHtml(brand.name)}</strong><br>
+              <a href="${escapeHtml(preferencesUrl)}" style="color:#8a97a8;text-decoration:underline;">Email preferences</a> &nbsp;·&nbsp;
+              <a href="${escapeHtml(options.unsubscribeUrl)}" style="color:#8a97a8;text-decoration:underline;">Unsubscribe</a>
+            </div>
+          </td>
+        </tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}
+
+export function buildSubject(content: WeeklyContent): string {
+  const ahead = weekAheadSpan(content.week_label);
+  const qqq = content.tape?.find((row) => row.symbol.toUpperCase() === 'QQQ');
+  const tech = content.sectors?.find((row) => row.etf.toUpperCase() === 'XLK');
+  const bits: string[] = [];
+  if (qqq?.pct != null) bits.push(`QQQ ${signedPercent(qqq.pct)}`);
+  if (tech) bits.push(`tech ${signedPercent(tech.pct)}`);
+  const head = ahead ? `Week ahead ${ahead}` : content.week_label;
+  return bits.length ? `${head}: ${bits.join(', ')}` : head;
+}
